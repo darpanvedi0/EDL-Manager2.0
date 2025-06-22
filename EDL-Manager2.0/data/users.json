@@ -1,1 +1,35 @@
-{}
+{
+    "admin": {
+        "password": "$2y$10$8u7EoVGSLoPTQjjuLiNn7.30R4AwxxDC3dsJA2lHSuFCsby4Lt\/Ri",
+        "name": "System Administrator",
+        "email": "admin@company.com",
+        "role": "admin",
+        "permissions": [
+            "submit",
+            "approve",
+            "view",
+            "manage",
+            "audit"
+        ]
+    },
+    "approver": {
+        "password": "$2y$10$.5V0NYLt0L2FAZ2uNEM1euT7dE5j\/yA6n8cUVNfm1zX.IjrhIjAGS",
+        "name": "Security Approver",
+        "email": "approver@company.com",
+        "role": "approver",
+        "permissions": [
+            "approve",
+            "view"
+        ]
+    },
+    "operator": {
+        "password": "$2y$10$JWQK1\/39wtjcSpjkEGrfOeeU4PRbj.KnaQn36XvgPiD.XCxrgtkwq",
+        "name": "Security Operator",
+        "email": "operator@company.com",
+        "role": "operator",
+        "permissions": [
+            "submit",
+            "view"
+        ]
+    }
+}

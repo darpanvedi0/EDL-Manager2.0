@@ -68,7 +68,7 @@ $user_name = $_SESSION['name'] ?? $_SESSION['username'] ?? 'User';
     <link href="../assets/css/style.css" rel="stylesheet">
 </head>
 <body>
-    <!-- Navigation -->
+     <!-- Navigation -->
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
         <div class="container">
             <a class="navbar-brand fw-bold" href="../index.php">
@@ -76,27 +76,62 @@ $user_name = $_SESSION['name'] ?? $_SESSION['username'] ?? 'User';
                 <?php echo APP_NAME; ?>
             </a>
             
-            <div class="navbar-nav me-auto">
-                <a class="nav-link" href="../index.php">
-                    <i class="fas fa-tachometer-alt me-1"></i> Dashboard
-                </a>
-                <a class="nav-link active" href="edl_viewer.php">
-                    <i class="fas fa-list me-1"></i> EDL Viewer
-                </a>
-            </div>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
             
-            <div class="navbar-nav">
-                <div class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
-                        <i class="fas fa-user me-1"></i>
-                        <?php echo htmlspecialchars($user_name); ?>
-                    </a>
-                    <ul class="dropdown-menu dropdown-menu-end">
-                        <li><a class="dropdown-item" href="../logout.php">
-                            <i class="fas fa-sign-out-alt me-2"></i> Logout
-                        </a></li>
-                    </ul>
-                </div>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="../index.php">
+                            <i class="fas fa-tachometer-alt me-1"></i> Dashboard
+                        </a>
+                    </li>
+                    <?php if (in_array('submit', $_SESSION['permissions'] ?? [])): ?>
+                    <li class="nav-item">
+                        <a class="nav-link" href="submit_request.php">
+                            <i class="fas fa-plus me-1"></i> Submit Request
+                        </a>
+                    </li>
+                    <?php endif; ?>
+                    <?php if (in_array('approve', $_SESSION['permissions'] ?? [])): ?>
+                    <li class="nav-item">
+                        <a class="nav-link" href="approvals.php">
+                            <i class="fas fa-check-circle me-1"></i> Approvals
+                        </a>
+                    </li>
+                    <?php endif; ?>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="edl_viewer.php">
+                            <i class="fas fa-list me-1"></i> EDL Viewer
+                        </a>
+                    </li>
+                </ul>
+                
+                <ul class="navbar-nav">
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
+                            <i class="fas fa-user me-1"></i>
+                            <?php echo htmlspecialchars($user_name); ?>
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li class="dropdown-item-text">
+                                <div class="fw-bold"><?php echo htmlspecialchars($_SESSION['username'] ?? ''); ?></div>
+                                <small class="text-muted"><?php echo htmlspecialchars($_SESSION['email'] ?? ''); ?></small>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li class="dropdown-item-text">
+                                <small class="text-muted">
+                                    Role: <span class="badge bg-primary"><?php echo ucfirst($_SESSION['role'] ?? ''); ?></span>
+                                </small>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="../logout.php">
+                                <i class="fas fa-sign-out-alt me-2"></i> Logout
+                            </a></li>
+                        </ul>
+                    </li>
+                </ul>
             </div>
         </div>
     </nav>
