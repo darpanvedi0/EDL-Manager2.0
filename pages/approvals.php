@@ -356,6 +356,26 @@ function generate_edl_files() {
                             <i class="fas fa-list me-1"></i> EDL Viewer
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="denied_entries.php">
+                            <i class="fas fa-ban me-1"></i> Denied Entries
+                        </a>
+                    </li>
+                    <?php if (in_array('manage', $user_permissions)): ?>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
+                            <i class="fas fa-cog me-1"></i> Admin
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="audit_log.php">
+                                <i class="fas fa-clipboard-list me-2"></i> Audit Log
+                            </a></li>
+                            <li><a class="dropdown-item" href="user_management.php">
+                                <i class="fas fa-users me-2"></i> User Management
+                            </a></li>
+                        </ul>
+                    </li>
+                    <?php endif; ?>
                 </ul>
                 
                 <ul class="navbar-nav">

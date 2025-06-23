@@ -17,5 +17,33 @@
         "details": "Approveed ip request from admin",
         "request_id": "req_68582aedc5b672.43860503",
         "admin_comment": ""
+    },
+    {
+        "id": "audit_6858a6d51acb60.27456679",
+        "timestamp": "2025-06-23T02:59:01+02:00",
+        "action": "submit",
+        "entry": "2.2.2.2",
+        "user": "admin",
+        "details": "Submitted ip request",
+        "request_id": "req_6858a6d51a83a5.32844460"
+    },
+    {
+        "id": "audit_6858a6e3c1f6c5.40174600",
+        "timestamp": "2025-06-23T02:59:15+02:00",
+        "action": "deny",
+        "entry": "2.2.2.2",
+        "user": "admin",
+        "details": "Denyed ip request from admin",
+        "request_id": "req_6858a6d51a83a5.32844460",
+        "admin_comment": "Denied"
+    },
+    {
+        "id": "audit_6858a8ddca4652.07363599",
+        "timestamp": "2025-06-23T03:07:41+02:00",
+        "action": "remove_denial",
+        "entry": "2.2.2.2",
+        "user": "admin",
+        "details": "Removed ip from denied list",
+        "admin_comment": "Previously denied: Denied"
     }
 ]

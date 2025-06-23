@@ -45,27 +45,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $approved_entries = read_json_file(DATA_DIR . '/approved_entries.json');
             $denied_entries = read_json_file(DATA_DIR . '/denied_entries.json');
             
-            // Check pending
-            foreach ($pending_requests as $req) {
-                if ($req['entry'] === $entry && $req['status'] === 'pending') {
-                    $errors[] = 'Entry already has a pending request';
-                    break;
-                }
-            }
-            
-            // Check approved
-            foreach ($approved_entries as $ent) {
-                if ($ent['entry'] === $entry && $ent['status'] === 'active') {
-                    $errors[] = 'Entry already exists in approved list';
-                    break;
-                }
-            }
-            
-            // Check denied
+            // Check denied entries FIRST (highest priority)
             foreach ($denied_entries as $den) {
-                if ($den['entry'] === $entry) {
-                    $errors[] = "Entry was previously denied: " . ($den['reason'] ?? 'No reason provided');
+                if ($den['entry'] === $entry && $den['type'] === $type) {
+                    $denied_reason = htmlspecialchars($den['reason'] ?? 'No reason provided');
+                    $denied_by = htmlspecialchars($den['denied_by'] ?? 'Admin');
+                    $denied_date = isset($den['denied_at']) ? date('M j, Y', strtotime($den['denied_at'])) : 'Unknown';
+                    
+                    $errors[] = "This entry was previously denied and cannot be submitted.<br>" .
+                               "<strong>Denial Reason:</strong> {$denied_reason}<br>" .
+                               "<strong>Denied by:</strong> {$denied_by} on {$denied_date}<br>" .
+                               "<em>Contact an administrator if you believe this is an error.</em>";
                     break;
+                }
+            }
+            
+            // Only check other lists if not denied
+            if (empty($errors)) {
+                // Check pending
+                foreach ($pending_requests as $req) {
+                    if ($req['entry'] === $entry && $req['status'] === 'pending') {
+                        $errors[] = 'Entry already has a pending request';
+                        break;
+                    }
+                }
+                
+                // Check approved
+                foreach ($approved_entries as $ent) {
+                    if ($ent['entry'] === $entry && $ent['status'] === 'active') {
+                        $errors[] = 'Entry already exists in approved list';
+                        break;
+                    }
                 }
             }
         }
@@ -224,6 +234,26 @@ $flash = get_flash();
                             <i class="fas fa-list me-1"></i> EDL Viewer
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="denied_entries.php">
+                            <i class="fas fa-ban me-1"></i> Denied Entries
+                        </a>
+                    </li>
+                    <?php if (in_array('manage', $user_permissions)): ?>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
+                            <i class="fas fa-cog me-1"></i> Admin
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="audit_log.php">
+                                <i class="fas fa-clipboard-list me-2"></i> Audit Log
+                            </a></li>
+                            <li><a class="dropdown-item" href="user_management.php">
+                                <i class="fas fa-users me-2"></i> User Management
+                            </a></li>
+                        </ul>
+                    </li>
+                    <?php endif; ?>
                 </ul>
                 
                 <ul class="navbar-nav">
@@ -482,7 +512,7 @@ $flash = get_flash();
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Auto-detect entry type
+        // Auto-detect entry type and check against denied entries
         document.getElementById('entry').addEventListener('input', function() {
             const entry = this.value.trim();
             const typeSelect = document.getElementById('type');
@@ -516,13 +546,86 @@ $flash = get_flash();
             } else {
                 indicator.innerHTML = '';
             }
+            
+            // Check against denied entries in real-time
+            if (entry.length > 3) {
+                checkDeniedEntries(entry, typeSelect.value);
+            } else {
+                clearDeniedWarning();
+            }
         });
+        
+        // Function to check denied entries via AJAX
+        function checkDeniedEntries(entry, type) {
+            fetch('../api/check_denied.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    entry: entry,
+                    type: type
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.denied) {
+                    showDeniedWarning(data.reason, data.denied_by, data.denied_date);
+                } else {
+                    clearDeniedWarning();
+                }
+            })
+            .catch(error => {
+                console.warn('Error checking denied entries:', error);
+            });
+        }
+        
+        // Show denied warning
+        function showDeniedWarning(reason, deniedBy, deniedDate) {
+            const existingWarning = document.getElementById('denied-warning');
+            if (existingWarning) {
+                existingWarning.remove();
+            }
+            
+            const entryField = document.getElementById('entry');
+            const warning = document.createElement('div');
+            warning.id = 'denied-warning';
+            warning.className = 'alert alert-danger mt-2';
+            warning.innerHTML = `
+                <i class="fas fa-ban"></i> <strong>Entry Previously Denied</strong><br>
+                <small><strong>Reason:</strong> ${reason}<br>
+                <strong>Denied by:</strong> ${deniedBy} on ${deniedDate}<br>
+                <em>This entry cannot be submitted. Contact an administrator if needed.</em></small>
+            `;
+            
+            entryField.parentNode.appendChild(warning);
+            entryField.classList.add('is-invalid');
+        }
+        
+        // Clear denied warning
+        function clearDeniedWarning() {
+            const warning = document.getElementById('denied-warning');
+            if (warning) {
+                warning.remove();
+            }
+            const entryField = document.getElementById('entry');
+            entryField.classList.remove('is-invalid');
+        }
         
         // Form validation
         (function() {
             const forms = document.querySelectorAll('.needs-validation');
             Array.prototype.slice.call(forms).forEach(function(form) {
                 form.addEventListener('submit', function(event) {
+                    // Check if there's a denied warning
+                    const deniedWarning = document.getElementById('denied-warning');
+                    if (deniedWarning) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        showNotification('Cannot submit a denied entry', 'danger');
+                        return false;
+                    }
+                    
                     if (!form.checkValidity()) {
                         event.preventDefault();
                         event.stopPropagation();
@@ -531,6 +634,27 @@ $flash = get_flash();
                 });
             });
         })();
+        
+        // Show notification function
+        function showNotification(message, type = 'info') {
+            const alertClass = 'alert-' + type;
+            const notification = document.createElement('div');
+            notification.className = `alert ${alertClass} alert-dismissible position-fixed`;
+            notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+            
+            notification.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.remove();
+                }
+            }, 3000);
+        }
         
         // Initialize tooltips
         var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
