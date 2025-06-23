@@ -4,6 +4,11 @@ require_once '../includes/functions.php';
 require_once '../includes/auth.php';
 require_once '../includes/validation.php';
 
+// Load Teams notifications if file exists (optional)
+if (file_exists('../includes/teams_notifications.php')) {
+    require_once '../includes/teams_notifications.php';
+}
+
 $auth = new EDLAuth();
 $auth->require_permission('approve');
 
@@ -83,6 +88,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         // Generate EDL files
                         generate_edl_files();
                         
+                        // Send Teams notification for approval (if Teams integration exists)
+                        if (function_exists('notify_teams_approved')) {
+                            try {
+                                notify_teams_approved($request, $_SESSION['username'], $admin_comment);
+                            } catch (Exception $e) {
+                                error_log('Teams notification failed: ' . $e->getMessage());
+                            }
+                        }
+                        
                         show_flash("Request approved successfully. Entry added to {$request['type']} blocklist.", 'success');
                         
                     } else if ($action === 'deny') {
@@ -116,6 +130,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $pending_requests[$key]['denied_by'] = $_SESSION['username'];
                         $pending_requests[$key]['denied_at'] = date('c');
                         $pending_requests[$key]['admin_comment'] = $admin_comment;
+                        
+                        // Send Teams notification for denial (if Teams integration exists)
+                        if (function_exists('notify_teams_denied')) {
+                            try {
+                                notify_teams_denied($request, $_SESSION['username'], $admin_comment);
+                            } catch (Exception $e) {
+                                error_log('Teams notification failed: ' . $e->getMessage());
+                            }
+                        }
                         
                         show_flash("Request denied. Reason provided to submitter.", 'success');
                     }
@@ -361,17 +384,44 @@ function generate_edl_files() {
                             <i class="fas fa-ban me-1"></i> Denied Entries
                         </a>
                     </li>
+                    
+                    <!-- Fixed Admin Dropdown -->
                     <?php if (in_array('manage', $user_permissions)): ?>
                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="fas fa-cog me-1"></i> Admin
                         </a>
-                        <ul class="dropdown-menu">
+                        <ul class="dropdown-menu" aria-labelledby="adminDropdown">
+                            <li>
+                                <h6 class="dropdown-header">
+                                    <i class="fas fa-server text-primary me-1"></i> Integration
+                                </h6>
+                            </li>
+                            <li><a class="dropdown-item" href="okta_config.php">
+                                <i class="fas fa-cloud text-primary me-2"></i> Okta SSO Configuration
+                                <small class="text-muted d-block">Configure Single Sign-On</small>
+                            </a></li>
+                            <li><a class="dropdown-item" href="teams_config.php">
+                                <i class="fab fa-microsoft text-info me-2"></i> Teams Notifications
+                                <small class="text-muted d-block">Configure Teams webhooks</small>
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <h6 class="dropdown-header">
+                                    <i class="fas fa-database text-secondary me-1"></i> Data Management
+                                </h6>
+                            </li>
+                            <li><a class="dropdown-item" href="denied_entries.php">
+                                <i class="fas fa-ban text-danger me-2"></i> Denied Entries
+                                <small class="text-muted d-block">View rejected requests</small>
+                            </a></li>
                             <li><a class="dropdown-item" href="audit_log.php">
-                                <i class="fas fa-clipboard-list me-2"></i> Audit Log
+                                <i class="fas fa-clipboard-list text-warning me-2"></i> Audit Log
+                                <small class="text-muted d-block">System activity log</small>
                             </a></li>
                             <li><a class="dropdown-item" href="user_management.php">
-                                <i class="fas fa-users me-2"></i> User Management
+                                <i class="fas fa-users text-success me-2"></i> User Management
+                                <small class="text-muted d-block">Manage local accounts</small>
                             </a></li>
                         </ul>
                     </li>
@@ -402,71 +452,6 @@ function generate_edl_files() {
                         </ul>
                     </li>
                 </ul>
-            </div>
-        </div>
-    </nav>
-    
-    <?php if ($flash): ?>
-    <div class="container mt-3">
-        <div class="alert alert-<?php echo $flash['type']; ?> alert-dismissible fade show">
-            <i class="fas fa-<?php echo $flash['type'] === 'success' ? 'check-circle' : 'exclamation-triangle'; ?>"></i>
-            <?php echo htmlspecialchars($flash['message']); ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-    </div>
-    <?php endif; ?>
-    
-    <?php if ($error_message): ?>
-    <div class="container mt-3">
-        <div class="alert alert-danger alert-dismissible fade show">
-            <i class="fas fa-exclamation-triangle"></i>
-            <?php echo $error_message; ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-    </div>
-    <?php endif; ?>
-    
-    <div class="container mt-4">
-        <!-- Page Header -->
-        <div class="page-header">
-            <h1 class="mb-2">
-                <i class="fas fa-check-circle me-2"></i>
-                Pending Approvals
-            </h1>
-            <p class="mb-0 opacity-75">Review and approve/deny EDL requests</p>
-        </div>
-        
-        <!-- Statistics -->
-        <div class="row mb-4">
-            <div class="col-lg-3 col-md-6 mb-3">
-                <div class="card stat-card bg-warning">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <h3 class="fw-bold mb-1 text-dark"><?php echo $stats['total_pending']; ?></h3>
-                                <p class="mb-0 text-dark">Total Pending</p>
-                            </div>
-                            <div>
-                                <i class="fas fa-clock stat-icon text-dark"></i>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-lg-3 col-md-6 mb-3">
-                <div class="card stat-card bg-danger">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <h3 class="fw-bold mb-1"><?php echo $stats['critical']; ?></h3>
-                                <p class="mb-0">Critical</p>
-                            </div>
-                            <div>
-                                <i class="fas fa-exclamation-triangle stat-icon"></i>
-                            </div>
-                        </div>
-                    </div>
-                </div>
             </div>
             <div class="col-lg-3 col-md-6 mb-3">
                 <div class="card stat-card bg-warning">
@@ -784,3 +769,67 @@ function generate_edl_files() {
     </script>
 </body>
 </html>
+        </div>
+    </nav>
+    
+    <?php if ($flash): ?>
+    <div class="container mt-3">
+        <div class="alert alert-<?php echo $flash['type']; ?> alert-dismissible fade show">
+            <i class="fas fa-<?php echo $flash['type'] === 'success' ? 'check-circle' : 'exclamation-triangle'; ?>"></i>
+            <?php echo htmlspecialchars($flash['message']); ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    </div>
+    <?php endif; ?>
+    
+    <?php if ($error_message): ?>
+    <div class="container mt-3">
+        <div class="alert alert-danger alert-dismissible fade show">
+            <i class="fas fa-exclamation-triangle"></i>
+            <?php echo $error_message; ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    </div>
+    <?php endif; ?>
+    
+    <div class="container mt-4">
+        <!-- Page Header -->
+        <div class="page-header">
+            <h1 class="mb-2">
+                <i class="fas fa-check-circle me-2"></i>
+                Pending Approvals
+            </h1>
+            <p class="mb-0 opacity-75">Review and approve/deny EDL requests</p>
+        </div>
+        
+        <!-- Statistics -->
+        <div class="row mb-4">
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card stat-card bg-warning">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h3 class="fw-bold mb-1 text-dark"><?php echo $stats['total_pending']; ?></h3>
+                                <p class="mb-0 text-dark">Total Pending</p>
+                            </div>
+                            <div>
+                                <i class="fas fa-clock stat-icon text-dark"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card stat-card bg-danger">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h3 class="fw-bold mb-1"><?php echo $stats['critical']; ?></h3>
+                                <p class="mb-0">Critical</p>
+                            </div>
+                            <div>
+                                <i class="fas fa-exclamation-triangle stat-icon"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>

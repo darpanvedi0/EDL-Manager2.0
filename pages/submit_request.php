@@ -3,6 +3,11 @@ require_once '../config/config.php';
 require_once '../includes/functions.php';
 require_once '../includes/auth.php';
 
+// Load Teams notifications if file exists (optional)
+if (file_exists('../includes/teams_notifications.php')) {
+    require_once '../includes/teams_notifications.php';
+}
+
 $auth = new EDLAuth();
 $auth->require_permission('submit');
 
@@ -112,7 +117,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ];
                 write_json_file(DATA_DIR . '/audit_logs.json', $logs);
                 
-                show_flash('Request submitted successfully! You will be notified when it is reviewed.', 'success');
+                // Send Teams notification for new request (if Teams integration exists)
+                $teams_notification_sent = false;
+                if (function_exists('notify_teams_new_request')) {
+                    try {
+                        $teams_notification_sent = notify_teams_new_request($request);
+                    } catch (Exception $e) {
+                        error_log('Teams notification failed: ' . $e->getMessage());
+                    }
+                }
+                
+                if ($teams_notification_sent) {
+                    show_flash('Request submitted successfully! Teams notification sent. You will be notified when it is reviewed.', 'success');
+                } else {
+                    show_flash('Request submitted successfully! You will be notified when it is reviewed.', 'success');
+                }
+                
                 header('Location: submit_request.php');
                 exit;
             } else {
@@ -239,17 +259,44 @@ $flash = get_flash();
                             <i class="fas fa-ban me-1"></i> Denied Entries
                         </a>
                     </li>
+                    
+                    <!-- Fixed Admin Dropdown -->
                     <?php if (in_array('manage', $user_permissions)): ?>
                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="fas fa-cog me-1"></i> Admin
                         </a>
-                        <ul class="dropdown-menu">
+                        <ul class="dropdown-menu" aria-labelledby="adminDropdown">
+                            <li>
+                                <h6 class="dropdown-header">
+                                    <i class="fas fa-server text-primary me-1"></i> Integration
+                                </h6>
+                            </li>
+                            <li><a class="dropdown-item" href="okta_config.php">
+                                <i class="fas fa-cloud text-primary me-2"></i> Okta SSO Configuration
+                                <small class="text-muted d-block">Configure Single Sign-On</small>
+                            </a></li>
+                            <li><a class="dropdown-item" href="teams_config.php">
+                                <i class="fab fa-microsoft text-info me-2"></i> Teams Notifications
+                                <small class="text-muted d-block">Configure Teams webhooks</small>
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <h6 class="dropdown-header">
+                                    <i class="fas fa-database text-secondary me-1"></i> Data Management
+                                </h6>
+                            </li>
+                            <li><a class="dropdown-item" href="denied_entries.php">
+                                <i class="fas fa-ban text-danger me-2"></i> Denied Entries
+                                <small class="text-muted d-block">View rejected requests</small>
+                            </a></li>
                             <li><a class="dropdown-item" href="audit_log.php">
-                                <i class="fas fa-clipboard-list me-2"></i> Audit Log
+                                <i class="fas fa-clipboard-list text-warning me-2"></i> Audit Log
+                                <small class="text-muted d-block">System activity log</small>
                             </a></li>
                             <li><a class="dropdown-item" href="user_management.php">
-                                <i class="fas fa-users me-2"></i> User Management
+                                <i class="fas fa-users text-success me-2"></i> User Management
+                                <small class="text-muted d-block">Manage local accounts</small>
                             </a></li>
                         </ul>
                     </li>

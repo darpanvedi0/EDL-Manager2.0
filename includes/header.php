@@ -1,5 +1,5 @@
 <?php
-// includes/header.php - Complete Fixed Version
+// includes/header.php - Updated with Teams integration
 // Determine correct paths
 $is_in_pages = strpos($_SERVER['PHP_SELF'], '/pages/') !== false;
 $base_path = $is_in_pages ? '../' : '';
@@ -128,20 +128,25 @@ $flash = get_flash();
                     <?php if (has_permission('manage')): ?>
                     <!-- Admin Dropdown -->
                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle <?php echo in_array(basename($_SERVER['PHP_SELF']), ['okta_config.php', 'denied_entries.php', 'audit_log.php']) ? 'active' : ''; ?>" 
+                        <a class="nav-link dropdown-toggle <?php echo in_array(basename($_SERVER['PHP_SELF']), ['okta_config.php', 'teams_config.php', 'denied_entries.php', 'audit_log.php', 'user_management.php']) ? 'active' : ''; ?>" 
                            href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="fas fa-cog me-1"></i> Admin
                         </a>
                         <ul class="dropdown-menu" aria-labelledby="adminDropdown">
                             <li>
                                 <h6 class="dropdown-header">
-                                    <i class="fas fa-shield-alt text-primary me-1"></i> System Management
+                                    <i class="fas fa-server text-primary me-1"></i> Integration
                                 </h6>
                             </li>
                             <li><a class="dropdown-item <?php echo basename($_SERVER['PHP_SELF']) === 'okta_config.php' ? 'active' : ''; ?>" 
                                    href="<?php echo $is_in_pages ? '' : 'pages/'; ?>okta_config.php">
                                 <i class="fas fa-cloud text-primary me-2"></i> Okta SSO Configuration
                                 <small class="text-muted d-block">Configure Single Sign-On</small>
+                            </a></li>
+                            <li><a class="dropdown-item <?php echo basename($_SERVER['PHP_SELF']) === 'teams_config.php' ? 'active' : ''; ?>" 
+                                   href="<?php echo $is_in_pages ? '' : 'pages/'; ?>teams_config.php">
+                                <i class="fab fa-microsoft text-info me-2"></i> Teams Notifications
+                                <small class="text-muted d-block">Configure Teams webhooks</small>
                             </a></li>
                             <li><hr class="dropdown-divider"></li>
                             <li>
@@ -156,8 +161,13 @@ $flash = get_flash();
                             </a></li>
                             <li><a class="dropdown-item <?php echo basename($_SERVER['PHP_SELF']) === 'audit_log.php' ? 'active' : ''; ?>" 
                                    href="<?php echo $is_in_pages ? '' : 'pages/'; ?>audit_log.php">
-                                <i class="fas fa-clipboard-list text-info me-2"></i> Audit Log
+                                <i class="fas fa-clipboard-list text-warning me-2"></i> Audit Log
                                 <small class="text-muted d-block">System activity log</small>
+                            </a></li>
+                            <li><a class="dropdown-item <?php echo basename($_SERVER['PHP_SELF']) === 'user_management.php' ? 'active' : ''; ?>" 
+                                   href="<?php echo $is_in_pages ? '' : 'pages/'; ?>user_management.php">
+                                <i class="fas fa-users text-success me-2"></i> User Management
+                                <small class="text-muted d-block">Manage local accounts</small>
                             </a></li>
                             <?php if (has_permission('audit')): ?>
                             <li><hr class="dropdown-divider"></li>
