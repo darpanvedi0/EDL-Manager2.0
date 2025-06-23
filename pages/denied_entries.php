@@ -276,15 +276,40 @@ $flash = get_flash();
                     </li>
                     <?php if (in_array('manage', $user_permissions)): ?>
                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="fas fa-cog me-1"></i> Admin
                         </a>
-                        <ul class="dropdown-menu">
+                        <ul class="dropdown-menu" aria-labelledby="adminDropdown">
+                            <li>
+                                <h6 class="dropdown-header">
+                                    <i class="fas fa-server text-primary me-1"></i> Integration
+                                </h6>
+                            </li>
+                            <li><a class="dropdown-item" href="okta_config.php">
+                                <i class="fas fa-cloud text-primary me-2"></i> Okta SSO Configuration
+                                <small class="text-muted d-block">Configure Single Sign-On</small>
+                            </a></li>
+                            <li><a class="dropdown-item" href="teams_config.php">
+                                <i class="fab fa-microsoft text-info me-2"></i> Teams Notifications
+                                <small class="text-muted d-block">Configure Teams webhooks</small>
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <h6 class="dropdown-header">
+                                    <i class="fas fa-database text-secondary me-1"></i> Data Management
+                                </h6>
+                            </li>
+                            <li><a class="dropdown-item active" href="denied_entries.php">
+                                <i class="fas fa-ban text-danger me-2"></i> Denied Entries
+                                <small class="text-muted d-block">View rejected requests</small>
+                            </a></li>
                             <li><a class="dropdown-item" href="audit_log.php">
-                                <i class="fas fa-clipboard-list me-2"></i> Audit Log
+                                <i class="fas fa-clipboard-list text-warning me-2"></i> Audit Log
+                                <small class="text-muted d-block">System activity log</small>
                             </a></li>
                             <li><a class="dropdown-item" href="user_management.php">
-                                <i class="fas fa-users me-2"></i> User Management
+                                <i class="fas fa-users text-success me-2"></i> User Management
+                                <small class="text-muted d-block">Manage local accounts</small>
                             </a></li>
                         </ul>
                     </li>
@@ -571,63 +596,6 @@ $flash = get_flash();
                                             <?php endif; ?>
                                         </td>
                                     </tr>
-                                    
-                                    <!-- Remove Modal (Admin Only) -->
-                                    <?php if ($is_admin): ?>
-                                    <div class="modal fade" id="removeModal<?php echo md5($entry['id']); ?>" tabindex="-1">
-                                        <div class="modal-dialog modal-dialog-centered">
-                                            <div class="modal-content">
-                                                <div class="modal-header">
-                                                    <h5 class="modal-title">
-                                                        <i class="fas fa-times-circle text-danger"></i> Remove from Denied List
-                                                    </h5>
-                                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                                </div>
-                                                <form method="POST">
-                                                    <div class="modal-body">
-                                                        <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
-                                                        <input type="hidden" name="action" value="remove_denial">
-                                                        <input type="hidden" name="entry_id" value="<?php echo htmlspecialchars($entry['id']); ?>">
-                                                        
-                                                        <div class="alert alert-warning">
-                                                            <h6 class="alert-heading">
-                                                                <i class="fas fa-exclamation-triangle"></i> Confirm Removal
-                                                            </h6>
-                                                            <hr>
-                                                            <div class="row">
-                                                                <div class="col-sm-3"><strong>Entry:</strong></div>
-                                                                <div class="col-sm-9"><code><?php echo htmlspecialchars($entry['entry']); ?></code></div>
-                                                            </div>
-                                                            <div class="row">
-                                                                <div class="col-sm-3"><strong>Type:</strong></div>
-                                                                <div class="col-sm-9"><?php echo strtoupper($entry['type']); ?></div>
-                                                            </div>
-                                                            <div class="row">
-                                                                <div class="col-sm-3"><strong>Reason:</strong></div>
-                                                                <div class="col-sm-9"><?php echo htmlspecialchars($entry['reason']); ?></div>
-                                                            </div>
-                                                        </div>
-                                                        
-                                                        <div class="bg-light p-3 rounded">
-                                                            <p class="mb-0 text-warning">
-                                                                <i class="fas fa-info-circle"></i>
-                                                                <strong>Warning:</strong> Removing this entry from the denied list will allow users to submit it again for approval.
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                    <div class="modal-footer">
-                                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                                                            <i class="fas fa-times"></i> Cancel
-                                                        </button>
-                                                        <button type="submit" class="btn btn-danger">
-                                                            <i class="fas fa-trash"></i> Remove from Denied List
-                                                        </button>
-                                                    </div>
-                                                </form>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <?php endif; ?>
                                 <?php endforeach; ?>
                             </tbody>
                         </table>
@@ -636,6 +604,65 @@ $flash = get_flash();
             </div>
         </div>
     </div>
+    
+    <!-- Remove Modals (Admin Only) -->
+    <?php if ($is_admin): ?>
+        <?php foreach ($denied_entries as $entry): ?>
+        <div class="modal fade" id="removeModal<?php echo md5($entry['id']); ?>" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="fas fa-times-circle text-danger"></i> Remove from Denied List
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <form method="POST">
+                        <div class="modal-body">
+                            <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                            <input type="hidden" name="action" value="remove_denial">
+                            <input type="hidden" name="entry_id" value="<?php echo htmlspecialchars($entry['id']); ?>">
+                            
+                            <div class="alert alert-warning">
+                                <h6 class="alert-heading">
+                                    <i class="fas fa-exclamation-triangle"></i> Confirm Removal
+                                </h6>
+                                <hr>
+                                <div class="row">
+                                    <div class="col-sm-3"><strong>Entry:</strong></div>
+                                    <div class="col-sm-9"><code><?php echo htmlspecialchars($entry['entry']); ?></code></div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-sm-3"><strong>Type:</strong></div>
+                                    <div class="col-sm-9"><?php echo strtoupper($entry['type']); ?></div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-sm-3"><strong>Reason:</strong></div>
+                                    <div class="col-sm-9"><?php echo htmlspecialchars($entry['reason']); ?></div>
+                                </div>
+                            </div>
+                            
+                            <div class="bg-light p-3 rounded">
+                                <p class="mb-0 text-warning">
+                                    <i class="fas fa-info-circle"></i>
+                                    <strong>Warning:</strong> Removing this entry from the denied list will allow users to submit it again for approval.
+                                </p>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                <i class="fas fa-times"></i> Cancel
+                            </button>
+                            <button type="submit" class="btn btn-danger">
+                                <i class="fas fa-trash"></i> Remove from Denied List
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <?php endforeach; ?>
+    <?php endif; ?>
     
     <!-- Footer -->
     <footer class="bg-light py-3 mt-5">

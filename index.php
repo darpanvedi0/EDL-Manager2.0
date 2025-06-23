@@ -171,17 +171,12 @@ $login_time = $_SESSION['login_time'] ?? time();
                             <i class="fas fa-ban me-1"></i> Denied Entries
                         </a>
                     </li>
-                    <?php if (in_array('manage', $user_permissions)): ?>
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
-                            <i class="fas fa-cog me-1"></i> Admin
-                        </a>
-                        <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="pages/audit_log.php">
-                                <i class="fas fa-clipboard-list me-2"></i> Audit Log
+2"></i> Audit Log
+                                <small class="text-muted d-block">System activity log</small>
                             </a></li>
                             <li><a class="dropdown-item" href="pages/user_management.php">
-                                <i class="fas fa-users me-2"></i> User Management
+                                <i class="fas fa-users text-success me-2"></i> User Management
+                                <small class="text-muted d-block">Manage local accounts</small>
                             </a></li>
                         </ul>
                     </li>

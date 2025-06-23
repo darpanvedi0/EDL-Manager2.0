@@ -184,15 +184,40 @@ $user_permissions = $_SESSION['permissions'] ?? [];
                     </li>
                     <?php if (in_array('manage', $user_permissions)): ?>
                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="fas fa-cog me-1"></i> Admin
                         </a>
-                        <ul class="dropdown-menu">
+                        <ul class="dropdown-menu" aria-labelledby="adminDropdown">
+                            <li>
+                                <h6 class="dropdown-header">
+                                    <i class="fas fa-server text-primary me-1"></i> Integration
+                                </h6>
+                            </li>
+                            <li><a class="dropdown-item" href="okta_config.php">
+                                <i class="fas fa-cloud text-primary me-2"></i> Okta SSO Configuration
+                                <small class="text-muted d-block">Configure Single Sign-On</small>
+                            </a></li>
+                            <li><a class="dropdown-item" href="teams_config.php">
+                                <i class="fab fa-microsoft text-info me-2"></i> Teams Notifications
+                                <small class="text-muted d-block">Configure Teams webhooks</small>
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <h6 class="dropdown-header">
+                                    <i class="fas fa-database text-secondary me-1"></i> Data Management
+                                </h6>
+                            </li>
+                            <li><a class="dropdown-item" href="denied_entries.php">
+                                <i class="fas fa-ban text-danger me-2"></i> Denied Entries
+                                <small class="text-muted d-block">View rejected requests</small>
+                            </a></li>
                             <li><a class="dropdown-item" href="audit_log.php">
-                                <i class="fas fa-clipboard-list me-2"></i> Audit Log
+                                <i class="fas fa-clipboard-list text-warning me-2"></i> Audit Log
+                                <small class="text-muted d-block">System activity log</small>
                             </a></li>
                             <li><a class="dropdown-item" href="user_management.php">
-                                <i class="fas fa-users me-2"></i> User Management
+                                <i class="fas fa-users text-success me-2"></i> User Management
+                                <small class="text-muted d-block">Manage local accounts</small>
                             </a></li>
                         </ul>
                     </li>
