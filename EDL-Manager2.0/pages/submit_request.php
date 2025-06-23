@@ -8,7 +8,6 @@ $auth->require_permission('submit');
 
 $page_title = 'Submit Request';
 $error_message = '';
-$success_message = '';
 
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -123,6 +122,10 @@ $user_requests = array_filter($user_requests, function($r) {
 $user_requests = array_slice(array_reverse($user_requests), 0, 5);
 
 $user_name = $_SESSION['name'] ?? $_SESSION['username'] ?? 'User';
+$user_username = $_SESSION['username'] ?? 'unknown';
+$user_email = $_SESSION['email'] ?? 'user@company.com';
+$user_role = $_SESSION['role'] ?? 'user';
+$user_permissions = $_SESSION['permissions'] ?? [];
 $flash = get_flash();
 ?>
 <!DOCTYPE html>
@@ -133,7 +136,54 @@ $flash = get_flash();
     <title><?php echo $page_title; ?> - <?php echo APP_NAME; ?></title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <link href="../assets/css/style.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .navbar {
+            box-shadow: 0 2px 4px rgba(0,0,0,.1);
+        }
+        .card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+            transition: all 0.3s ease;
+        }
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+        }
+        .btn {
+            border-radius: 10px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        .btn:hover {
+            transform: translateY(-1px);
+        }
+        .alert {
+            border: none;
+            border-radius: 10px;
+            border-left: 4px solid;
+        }
+        .alert-success {
+            border-left-color: #198754;
+            background-color: rgba(25, 135, 84, 0.1);
+        }
+        .dropdown-menu {
+            border: none;
+            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+            border-radius: 10px;
+        }
+        .page-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+    </style>
 </head>
 <body>
     <!-- Navigation -->
@@ -155,14 +205,14 @@ $flash = get_flash();
                             <i class="fas fa-tachometer-alt me-1"></i> Dashboard
                         </a>
                     </li>
-                    <?php if (in_array('submit', $_SESSION['permissions'] ?? [])): ?>
+                    <?php if (in_array('submit', $user_permissions)): ?>
                     <li class="nav-item">
                         <a class="nav-link active" href="submit_request.php">
                             <i class="fas fa-plus me-1"></i> Submit Request
                         </a>
                     </li>
                     <?php endif; ?>
-                    <?php if (in_array('approve', $_SESSION['permissions'] ?? [])): ?>
+                    <?php if (in_array('approve', $user_permissions)): ?>
                     <li class="nav-item">
                         <a class="nav-link" href="approvals.php">
                             <i class="fas fa-check-circle me-1"></i> Approvals
@@ -184,13 +234,13 @@ $flash = get_flash();
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end">
                             <li class="dropdown-item-text">
-                                <div class="fw-bold"><?php echo htmlspecialchars($_SESSION['username'] ?? ''); ?></div>
-                                <small class="text-muted"><?php echo htmlspecialchars($_SESSION['email'] ?? ''); ?></small>
+                                <div class="fw-bold"><?php echo htmlspecialchars($user_username); ?></div>
+                                <small class="text-muted"><?php echo htmlspecialchars($user_email); ?></small>
                             </li>
                             <li><hr class="dropdown-divider"></li>
                             <li class="dropdown-item-text">
                                 <small class="text-muted">
-                                    Role: <span class="badge bg-primary"><?php echo ucfirst($_SESSION['role'] ?? ''); ?></span>
+                                    Role: <span class="badge bg-primary"><?php echo ucfirst($user_role); ?></span>
                                 </small>
                             </li>
                             <li><hr class="dropdown-divider"></li>
@@ -204,23 +254,26 @@ $flash = get_flash();
         </div>
     </nav>
     
-    <div class="container mt-4">
-        <!-- Flash Messages -->
-        <?php if ($flash): ?>
+    <?php if ($flash): ?>
+    <div class="container mt-3">
         <div class="alert alert-<?php echo $flash['type']; ?> alert-dismissible fade show">
             <i class="fas fa-check-circle"></i>
             <?php echo htmlspecialchars($flash['message']); ?>
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
-        <?php endif; ?>
-        
-        <?php if ($error_message): ?>
+    </div>
+    <?php endif; ?>
+    
+    <?php if ($error_message): ?>
+    <div class="container mt-3">
         <div class="alert alert-danger">
             <i class="fas fa-exclamation-triangle"></i>
             <?php echo $error_message; ?>
         </div>
-        <?php endif; ?>
-        
+    </div>
+    <?php endif; ?>
+    
+    <div class="container mt-4">
         <!-- Page Header -->
         <div class="page-header">
             <h1 class="mb-2">
@@ -409,6 +462,24 @@ $flash = get_flash();
         </div>
     </div>
     
+    <!-- Footer -->
+    <footer class="bg-light py-3 mt-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-6">
+                    <p class="mb-0 text-muted">
+                        &copy; <?php echo date('Y'); ?> <?php echo APP_NAME; ?> v<?php echo APP_VERSION; ?>
+                    </p>
+                </div>
+                <div class="col-md-6 text-end">
+                    <small class="text-muted">
+                        Last updated: <?php echo date('Y-m-d H:i:s'); ?>
+                    </small>
+                </div>
+            </div>
+        </div>
+    </footer>
+    
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // Auto-detect entry type
@@ -460,6 +531,12 @@ $flash = get_flash();
                 });
             });
         })();
+        
+        // Initialize tooltips
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl)
+        });
     </script>
 </body>
 </html>

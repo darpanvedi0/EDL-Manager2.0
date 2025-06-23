@@ -83,7 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         // Generate EDL files
                         generate_edl_files();
                         
-                        $success_message = "Request approved successfully. Entry added to {$request['type']} blocklist.";
+                        show_flash("Request approved successfully. Entry added to {$request['type']} blocklist.", 'success');
                         
                     } else if ($action === 'deny') {
                         if (empty($admin_comment)) {
@@ -117,7 +117,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $pending_requests[$key]['denied_at'] = date('c');
                         $pending_requests[$key]['admin_comment'] = $admin_comment;
                         
-                        $success_message = "Request denied. Reason provided to submitter.";
+                        show_flash("Request denied. Reason provided to submitter.", 'success');
                     }
                     
                     // Save updated pending requests
@@ -137,7 +137,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ];
                     write_json_file(DATA_DIR . '/audit_logs.json', $audit_logs);
                     
-                    break;
+                    // Redirect to prevent resubmission
+                    header('Location: approvals.php');
+                    exit;
                 }
             }
             
@@ -178,6 +180,10 @@ $stats = [
 ];
 
 $user_name = $_SESSION['name'] ?? $_SESSION['username'] ?? 'User';
+$user_username = $_SESSION['username'] ?? 'unknown';
+$user_email = $_SESSION['email'] ?? 'user@company.com';
+$user_role = $_SESSION['role'] ?? 'user';
+$user_permissions = $_SESSION['permissions'] ?? [];
 $flash = get_flash();
 
 // Helper function to generate EDL files
@@ -227,7 +233,6 @@ function generate_edl_files() {
     <title><?php echo $page_title; ?> - <?php echo APP_NAME; ?></title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <link href="../assets/css/style.css" rel="stylesheet">
     <style>
         body {
             background-color: #f8f9fa;
@@ -261,6 +266,10 @@ function generate_edl_files() {
             height: 100%;
             background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 100%);
             pointer-events: none;
+        }
+        .stat-icon {
+            opacity: 0.8;
+            font-size: 2.5rem;
         }
         .btn {
             border-radius: 10px;
@@ -303,10 +312,6 @@ function generate_edl_files() {
             transform: translateY(-2px);
             box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
         }
-        .btn-group-sm .btn {
-            padding: 0.25rem 0.5rem;
-            font-size: 0.875rem;
-        }
     </style>
 </head>
 <body>
@@ -329,14 +334,14 @@ function generate_edl_files() {
                             <i class="fas fa-tachometer-alt me-1"></i> Dashboard
                         </a>
                     </li>
-                    <?php if (in_array('submit', $_SESSION['permissions'] ?? [])): ?>
+                    <?php if (in_array('submit', $user_permissions)): ?>
                     <li class="nav-item">
                         <a class="nav-link" href="submit_request.php">
                             <i class="fas fa-plus me-1"></i> Submit Request
                         </a>
                     </li>
                     <?php endif; ?>
-                    <?php if (in_array('approve', $_SESSION['permissions'] ?? [])): ?>
+                    <?php if (in_array('approve', $user_permissions)): ?>
                     <li class="nav-item">
                         <a class="nav-link active" href="approvals.php">
                             <i class="fas fa-check-circle me-1"></i> Approvals
@@ -361,13 +366,13 @@ function generate_edl_files() {
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end">
                             <li class="dropdown-item-text">
-                                <div class="fw-bold"><?php echo htmlspecialchars($_SESSION['username'] ?? ''); ?></div>
-                                <small class="text-muted"><?php echo htmlspecialchars($_SESSION['email'] ?? ''); ?></small>
+                                <div class="fw-bold"><?php echo htmlspecialchars($user_username); ?></div>
+                                <small class="text-muted"><?php echo htmlspecialchars($user_email); ?></small>
                             </li>
                             <li><hr class="dropdown-divider"></li>
                             <li class="dropdown-item-text">
                                 <small class="text-muted">
-                                    Role: <span class="badge bg-primary"><?php echo ucfirst($_SESSION['role'] ?? ''); ?></span>
+                                    Role: <span class="badge bg-primary"><?php echo ucfirst($user_role); ?></span>
                                 </small>
                             </li>
                             <li><hr class="dropdown-divider"></li>
@@ -381,32 +386,27 @@ function generate_edl_files() {
         </div>
     </nav>
     
-    <div class="container mt-4">
-        <!-- Flash Messages -->
-        <?php if ($flash): ?>
+    <?php if ($flash): ?>
+    <div class="container mt-3">
         <div class="alert alert-<?php echo $flash['type']; ?> alert-dismissible fade show">
             <i class="fas fa-<?php echo $flash['type'] === 'success' ? 'check-circle' : 'exclamation-triangle'; ?>"></i>
             <?php echo htmlspecialchars($flash['message']); ?>
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
-        <?php endif; ?>
-        
-        <?php if ($error_message): ?>
+    </div>
+    <?php endif; ?>
+    
+    <?php if ($error_message): ?>
+    <div class="container mt-3">
         <div class="alert alert-danger alert-dismissible fade show">
             <i class="fas fa-exclamation-triangle"></i>
             <?php echo $error_message; ?>
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
-        <?php endif; ?>
-        
-        <?php if ($success_message): ?>
-        <div class="alert alert-success alert-dismissible fade show">
-            <i class="fas fa-check-circle"></i>
-            <?php echo $success_message; ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-        <?php endif; ?>
-        
+    </div>
+    <?php endif; ?>
+    
+    <div class="container mt-4">
         <!-- Page Header -->
         <div class="page-header">
             <h1 class="mb-2">
@@ -418,35 +418,63 @@ function generate_edl_files() {
         
         <!-- Statistics -->
         <div class="row mb-4">
-            <div class="col-md-3">
+            <div class="col-lg-3 col-md-6 mb-3">
                 <div class="card stat-card bg-warning">
-                    <div class="card-body text-center">
-                        <h3 class="fw-bold mb-1 text-dark"><?php echo $stats['total_pending']; ?></h3>
-                        <p class="mb-0 text-dark">Total Pending</p>
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h3 class="fw-bold mb-1 text-dark"><?php echo $stats['total_pending']; ?></h3>
+                                <p class="mb-0 text-dark">Total Pending</p>
+                            </div>
+                            <div>
+                                <i class="fas fa-clock stat-icon text-dark"></i>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
-            <div class="col-md-3">
+            <div class="col-lg-3 col-md-6 mb-3">
                 <div class="card stat-card bg-danger">
-                    <div class="card-body text-center">
-                        <h3 class="fw-bold mb-1"><?php echo $stats['critical']; ?></h3>
-                        <p class="mb-0">Critical</p>
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h3 class="fw-bold mb-1"><?php echo $stats['critical']; ?></h3>
+                                <p class="mb-0">Critical</p>
+                            </div>
+                            <div>
+                                <i class="fas fa-exclamation-triangle stat-icon"></i>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
-            <div class="col-md-3">
+            <div class="col-lg-3 col-md-6 mb-3">
                 <div class="card stat-card bg-warning">
-                    <div class="card-body text-center">
-                        <h3 class="fw-bold mb-1 text-dark"><?php echo $stats['high']; ?></h3>
-                        <p class="mb-0 text-dark">High</p>
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h3 class="fw-bold mb-1 text-dark"><?php echo $stats['high']; ?></h3>
+                                <p class="mb-0 text-dark">High</p>
+                            </div>
+                            <div>
+                                <i class="fas fa-exclamation-circle stat-icon text-dark"></i>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
-            <div class="col-md-3">
+            <div class="col-lg-3 col-md-6 mb-3">
                 <div class="card stat-card bg-info">
-                    <div class="card-body text-center">
-                        <h3 class="fw-bold mb-1"><?php echo $stats['medium'] + $stats['low']; ?></h3>
-                        <p class="mb-0">Medium/Low</p>
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h3 class="fw-bold mb-1"><?php echo $stats['medium'] + $stats['low']; ?></h3>
+                                <p class="mb-0">Medium/Low</p>
+                            </div>
+                            <div>
+                                <i class="fas fa-info-circle stat-icon"></i>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -635,6 +663,24 @@ function generate_edl_files() {
         <?php endif; ?>
     </div>
     
+    <!-- Footer -->
+    <footer class="bg-light py-3 mt-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-6">
+                    <p class="mb-0 text-muted">
+                        &copy; <?php echo date('Y'); ?> <?php echo APP_NAME; ?> v<?php echo APP_VERSION; ?>
+                    </p>
+                </div>
+                <div class="col-md-6 text-end">
+                    <small class="text-muted">
+                        Last updated: <?php echo date('Y-m-d H:i:s'); ?>
+                    </small>
+                </div>
+            </div>
+        </div>
+    </footer>
+    
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // Copy to clipboard function
@@ -689,10 +735,32 @@ function generate_edl_files() {
             }, 3000);
         }
         
-        // Auto-refresh page every 60 seconds to check for new requests
-        setTimeout(() => {
-            window.location.reload();
-        }, 60000);
+        // Initialize tooltips
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl)
+        });
+        
+        // Add some interactivity
+        document.addEventListener('DOMContentLoaded', function() {
+            // Animate stats cards on load
+            const statCards = document.querySelectorAll('.stat-card');
+            statCards.forEach((card, index) => {
+                card.style.opacity = '0';
+                card.style.transform = 'translateY(20px)';
+                
+                setTimeout(() => {
+                    card.style.transition = 'all 0.5s ease';
+                    card.style.opacity = '1';
+                    card.style.transform = 'translateY(0)';
+                }, index * 100);
+            });
+            
+            // Auto-refresh page every 60 seconds to check for new requests
+            setTimeout(() => {
+                window.location.reload();
+            }, 60000);
+        });
     </script>
 </body>
 </html>
