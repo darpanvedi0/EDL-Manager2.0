@@ -453,6 +453,71 @@ function generate_edl_files() {
                     </li>
                 </ul>
             </div>
+        </div>
+    </nav>
+    
+    <?php if ($flash): ?>
+    <div class="container mt-3">
+        <div class="alert alert-<?php echo $flash['type']; ?> alert-dismissible fade show">
+            <i class="fas fa-<?php echo $flash['type'] === 'success' ? 'check-circle' : 'exclamation-triangle'; ?>"></i>
+            <?php echo htmlspecialchars($flash['message']); ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    </div>
+    <?php endif; ?>
+    
+    <?php if ($error_message): ?>
+    <div class="container mt-3">
+        <div class="alert alert-danger alert-dismissible fade show">
+            <i class="fas fa-exclamation-triangle"></i>
+            <?php echo $error_message; ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    </div>
+    <?php endif; ?>
+    
+    <div class="container mt-4">
+        <!-- Page Header -->
+        <div class="page-header">
+            <h1 class="mb-2">
+                <i class="fas fa-check-circle me-2"></i>
+                Pending Approvals
+            </h1>
+            <p class="mb-0 opacity-75">Review and approve/deny EDL requests</p>
+        </div>
+        
+        <!-- Statistics -->
+        <div class="row mb-4">
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card stat-card bg-warning">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h3 class="fw-bold mb-1 text-dark"><?php echo $stats['total_pending']; ?></h3>
+                                <p class="mb-0 text-dark">Total Pending</p>
+                            </div>
+                            <div>
+                                <i class="fas fa-clock stat-icon text-dark"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card stat-card bg-danger">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h3 class="fw-bold mb-1"><?php echo $stats['critical']; ?></h3>
+                                <p class="mb-0">Critical</p>
+                            </div>
+                            <div>
+                                <i class="fas fa-exclamation-triangle stat-icon"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
             <div class="col-lg-3 col-md-6 mb-3">
                 <div class="card stat-card bg-warning">
                     <div class="card-body">
@@ -769,67 +834,3 @@ function generate_edl_files() {
     </script>
 </body>
 </html>
-        </div>
-    </nav>
-    
-    <?php if ($flash): ?>
-    <div class="container mt-3">
-        <div class="alert alert-<?php echo $flash['type']; ?> alert-dismissible fade show">
-            <i class="fas fa-<?php echo $flash['type'] === 'success' ? 'check-circle' : 'exclamation-triangle'; ?>"></i>
-            <?php echo htmlspecialchars($flash['message']); ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-    </div>
-    <?php endif; ?>
-    
-    <?php if ($error_message): ?>
-    <div class="container mt-3">
-        <div class="alert alert-danger alert-dismissible fade show">
-            <i class="fas fa-exclamation-triangle"></i>
-            <?php echo $error_message; ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-    </div>
-    <?php endif; ?>
-    
-    <div class="container mt-4">
-        <!-- Page Header -->
-        <div class="page-header">
-            <h1 class="mb-2">
-                <i class="fas fa-check-circle me-2"></i>
-                Pending Approvals
-            </h1>
-            <p class="mb-0 opacity-75">Review and approve/deny EDL requests</p>
-        </div>
-        
-        <!-- Statistics -->
-        <div class="row mb-4">
-            <div class="col-lg-3 col-md-6 mb-3">
-                <div class="card stat-card bg-warning">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <h3 class="fw-bold mb-1 text-dark"><?php echo $stats['total_pending']; ?></h3>
-                                <p class="mb-0 text-dark">Total Pending</p>
-                            </div>
-                            <div>
-                                <i class="fas fa-clock stat-icon text-dark"></i>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-lg-3 col-md-6 mb-3">
-                <div class="card stat-card bg-danger">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <h3 class="fw-bold mb-1"><?php echo $stats['critical']; ?></h3>
-                                <p class="mb-0">Critical</p>
-                            </div>
-                            <div>
-                                <i class="fas fa-exclamation-triangle stat-icon"></i>
-                            </div>
-                        </div>
-                    </div>
-                </div>
