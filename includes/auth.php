@@ -1,6 +1,5 @@
 <?php
-// EDL Manager Authentication - FIXED VERSION
-
+// includes/auth.php - FIXED VERSION with correct paths
 class EDLAuth {
     private $users_file;
     
@@ -98,7 +97,9 @@ class EDLAuth {
     
     public function require_auth() {
         if (!$this->check_session()) {
-            header('Location: /login.php');
+            // Get the correct base path for redirects
+            $base_path = $this->get_base_path();
+            header('Location: ' . $base_path . 'login.php');
             exit;
         }
     }
@@ -109,9 +110,28 @@ class EDLAuth {
             if (function_exists('show_flash')) {
                 show_flash('Insufficient permissions', 'danger');
             }
-            header('Location: /index.php');
+            $base_path = $this->get_base_path();
+            header('Location: ' . $base_path . 'index.php');
             exit;
         }
+    }
+    
+    private function get_base_path() {
+        // Determine the correct base path for the application
+        $script_name = $_SERVER['SCRIPT_NAME'] ?? '';
+        $request_uri = $_SERVER['REQUEST_URI'] ?? '';
+        
+        // If we're in a subdirectory like /EDL-Manager2.0/
+        if (strpos($script_name, '/') !== false) {
+            $path_parts = explode('/', trim($script_name, '/'));
+            if (count($path_parts) > 1) {
+                // Remove the last part (filename) and keep directory structure
+                array_pop($path_parts);
+                return '/' . implode('/', $path_parts) . '/';
+            }
+        }
+        
+        return '/';
     }
     
     private function load_users() {
@@ -138,6 +158,24 @@ if (!function_exists('has_permission')) {
     function has_permission($permission) {
         if (!is_authenticated()) return false;
         return in_array($permission, $_SESSION['permissions'] ?? []);
+    }
+}
+
+if (!function_exists('get_app_base_path')) {
+    function get_app_base_path() {
+        // Get the base path of the application
+        $script_name = $_SERVER['SCRIPT_NAME'] ?? '';
+        
+        if (strpos($script_name, '/') !== false) {
+            $path_parts = explode('/', trim($script_name, '/'));
+            if (count($path_parts) > 1) {
+                // Remove the last part (filename) and keep directory structure
+                array_pop($path_parts);
+                return '/' . implode('/', $path_parts) . '/';
+            }
+        }
+        
+        return '/';
     }
 }
 ?>

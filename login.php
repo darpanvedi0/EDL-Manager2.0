@@ -1,5 +1,5 @@
 <?php
-// Enable error reporting for debugging
+// login.php - Fixed with proper Okta integration
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
@@ -8,8 +8,24 @@ require_once 'config/config.php';
 require_once 'includes/functions.php';
 require_once 'includes/auth.php';
 
+// Check if Okta auth file exists and load it
+$okta_enabled = false;
+$allow_local_fallback = true;
+if (file_exists('includes/okta_auth.php')) {
+    require_once 'includes/okta_auth.php';
+    $okta_auth = new OktaAuth();
+    $okta_enabled = $okta_auth->is_enabled();
+    $allow_local_fallback = $okta_auth->allow_local_fallback();
+}
+
 $auth = new EDLAuth();
 $error_message = '';
+
+// If Okta is enabled and no local fallback, redirect to Okta
+if ($okta_enabled && !$allow_local_fallback) {
+    header('Location: okta/login.php');
+    exit;
+}
 
 // Redirect if already authenticated
 if ($auth->check_session()) {
@@ -32,6 +48,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error_message = 'Invalid username or password.';
         }
     }
+}
+
+// Handle error messages
+$error_param = $_GET['error'] ?? '';
+if ($error_param === 'okta_failed') {
+    $error_message = 'Okta authentication failed. Please try again.';
+}
+
+$message_param = $_GET['message'] ?? '';
+$info_message = '';
+if ($message_param === 'logged_out') {
+    $info_message = 'You have been successfully logged out.';
 }
 ?>
 <!DOCTYPE html>
@@ -91,6 +119,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
         }
+        .btn-okta {
+            background: linear-gradient(135deg, #007acc 0%, #0056a3 100%);
+            border: none;
+            border-radius: 10px;
+            padding: 12px;
+            font-weight: 600;
+            font-size: 16px;
+            color: white;
+            width: 100%;
+            margin-bottom: 1rem;
+            text-decoration: none;
+        }
+        .btn-okta:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 122, 204, 0.4);
+            color: white;
+            text-decoration: none;
+        }
+        .divider {
+            text-align: center;
+            margin: 1rem 0;
+            color: #6c757d;
+        }
         .demo-accounts {
             background: #f8f9fa;
             border-radius: 10px;
@@ -131,102 +182,197 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
             <?php endif; ?>
             
-            <form method="POST" class="needs-validation" novalidate>
-                <div class="mb-3">
-                    <label for="username" class="form-label fw-bold">Username</label>
-                    <div class="input-group">
-                        <span class="input-group-text bg-light">
-                            <i class="fas fa-user text-muted"></i>
-                        </span>
-                        <input type="text" class="form-control" id="username" name="username" 
-                               value="<?php echo htmlspecialchars($_POST['username'] ?? ''); ?>"
-                               required autocomplete="username" autofocus
-                               placeholder="Enter your username">
-                    </div>
+            <?php if ($info_message): ?>
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i>
+                    <?php echo htmlspecialchars($info_message); ?>
+                </div>
+            <?php endif; ?>
+            
+            <?php if ($okta_enabled): ?>
+                <!-- Okta SSO Login Button -->
+                <a href="okta/login.php" class="btn btn-okta d-flex align-items-center justify-content-center">
+                    <i class="fas fa-cloud me-2"></i>
+                    Sign in with Okta SSO
+                </a>
+                
+                <?php if ($allow_local_fallback): ?>
+                <div class="divider">
+                    <span>or use local account</span>
                 </div>
                 
-                <div class="mb-4">
-                    <label for="password" class="form-label fw-bold">Password</label>
-                    <div class="input-group">
-                        <span class="input-group-text bg-light">
-                            <i class="fas fa-lock text-muted"></i>
-                        </span>
-                        <input type="password" class="form-control" id="password" name="password" 
-                               required autocomplete="current-password"
-                               placeholder="Enter your password">
-                        <button class="btn btn-outline-secondary" type="button" id="togglePassword">
-                            <i class="fas fa-eye"></i>
+                <!-- Local Login Form (Fallback) -->
+                <form method="POST" class="needs-validation" novalidate>
+                    <div class="mb-3">
+                        <label for="username" class="form-label fw-bold">Username</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light">
+                                <i class="fas fa-user text-muted"></i>
+                            </span>
+                            <input type="text" class="form-control" id="username" name="username" 
+                                   value="<?php echo htmlspecialchars($_POST['username'] ?? ''); ?>"
+                                   required autocomplete="username"
+                                   placeholder="Local account username">
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label for="password" class="form-label fw-bold">Password</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light">
+                                <i class="fas fa-lock text-muted"></i>
+                            </span>
+                            <input type="password" class="form-control" id="password" name="password" 
+                                   required autocomplete="current-password"
+                                   placeholder="Local account password">
+                            <button class="btn btn-outline-secondary" type="button" id="togglePassword">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-outline-primary btn-login">
+                            <i class="fas fa-key me-2"></i>
+                            Local Login
                         </button>
                     </div>
-                </div>
+                </form>
                 
-                <div class="d-grid">
-                    <button type="submit" class="btn btn-primary btn-login">
-                        <i class="fas fa-sign-in-alt me-2"></i>
-                        Sign In
-                    </button>
+                <div class="demo-accounts">
+                    <h6 class="text-primary mb-2">
+                        <i class="fas fa-vial"></i> Demo Accounts
+                    </h6>
+                    <div class="d-flex flex-wrap gap-1">
+                        <button class="demo-btn" onclick="fillCredentials('admin', 'admin123')">
+                            <i class="fas fa-user-shield"></i> Admin
+                        </button>
+                        <button class="demo-btn" onclick="fillCredentials('approver', 'approver123')">
+                            <i class="fas fa-user-check"></i> Approver
+                        </button>
+                        <button class="demo-btn" onclick="fillCredentials('operator', 'operator123')">
+                            <i class="fas fa-user-edit"></i> Operator
+                        </button>
+                        <button class="demo-btn" onclick="clearCredentials()">
+                            <i class="fas fa-times"></i> Clear
+                        </button>
+                    </div>
+                    <small class="text-muted d-block mt-2">
+                        Click any demo account button to auto-fill credentials
+                    </small>
                 </div>
-            </form>
-            
-            <div class="demo-accounts">
-                <h6 class="text-primary mb-2">
-                    <i class="fas fa-vial"></i> Demo Accounts
-                </h6>
-                <div class="d-flex flex-wrap gap-1">
-                    <button class="demo-btn" onclick="fillCredentials('admin', 'admin123')">
-                        <i class="fas fa-user-shield"></i> Admin
-                    </button>
-                    <button class="demo-btn" onclick="fillCredentials('approver', 'approver123')">
-                        <i class="fas fa-user-check"></i> Approver
-                    </button>
-                    <button class="demo-btn" onclick="fillCredentials('operator', 'operator123')">
-                        <i class="fas fa-user-edit"></i> Operator
-                    </button>
-                    <button class="demo-btn" onclick="clearCredentials()">
-                        <i class="fas fa-times"></i> Clear
-                    </button>
+                <?php endif; ?>
+                
+            <?php else: ?>
+                <!-- Traditional Login Form (SSO Disabled) -->
+                <form method="POST" class="needs-validation" novalidate>
+                    <div class="mb-3">
+                        <label for="username" class="form-label fw-bold">Username</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light">
+                                <i class="fas fa-user text-muted"></i>
+                            </span>
+                            <input type="text" class="form-control" id="username" name="username" 
+                                   value="<?php echo htmlspecialchars($_POST['username'] ?? ''); ?>"
+                                   required autocomplete="username" autofocus
+                                   placeholder="Enter your username">
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label for="password" class="form-label fw-bold">Password</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light">
+                                <i class="fas fa-lock text-muted"></i>
+                            </span>
+                            <input type="password" class="form-control" id="password" name="password" 
+                                   required autocomplete="current-password"
+                                   placeholder="Enter your password">
+                            <button class="btn btn-outline-secondary" type="button" id="togglePassword">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary btn-login">
+                            <i class="fas fa-sign-in-alt me-2"></i>
+                            Sign In
+                        </button>
+                    </div>
+                </form>
+                
+                <div class="demo-accounts">
+                    <h6 class="text-primary mb-2">
+                        <i class="fas fa-vial"></i> Demo Accounts
+                    </h6>
+                    <div class="d-flex flex-wrap gap-1">
+                        <button class="demo-btn" onclick="fillCredentials('admin', 'admin123')">
+                            <i class="fas fa-user-shield"></i> Admin
+                        </button>
+                        <button class="demo-btn" onclick="fillCredentials('approver', 'approver123')">
+                            <i class="fas fa-user-check"></i> Approver
+                        </button>
+                        <button class="demo-btn" onclick="fillCredentials('operator', 'operator123')">
+                            <i class="fas fa-user-edit"></i> Operator
+                        </button>
+                        <button class="demo-btn" onclick="clearCredentials()">
+                            <i class="fas fa-times"></i> Clear
+                        </button>
+                    </div>
+                    <small class="text-muted d-block mt-2">
+                        Click any demo account button to auto-fill credentials
+                    </small>
                 </div>
-                <small class="text-muted d-block mt-2">
-                    Click any demo account button to auto-fill credentials
-                </small>
-            </div>
+            <?php endif; ?>
         </div>
     </div>
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // Password toggle
-        document.getElementById('togglePassword').addEventListener('click', function() {
-            const password = document.getElementById('password');
-            const icon = this.querySelector('i');
-            
-            if (password.type === 'password') {
-                password.type = 'text';
-                icon.classList.remove('fa-eye');
-                icon.classList.add('fa-eye-slash');
-            } else {
-                password.type = 'password';
-                icon.classList.remove('fa-eye-slash');
-                icon.classList.add('fa-eye');
-            }
-        });
+        const togglePassword = document.getElementById('togglePassword');
+        if (togglePassword) {
+            togglePassword.addEventListener('click', function() {
+                const password = document.getElementById('password');
+                const icon = this.querySelector('i');
+                
+                if (password.type === 'password') {
+                    password.type = 'text';
+                    icon.classList.remove('fa-eye');
+                    icon.classList.add('fa-eye-slash');
+                } else {
+                    password.type = 'password';
+                    icon.classList.remove('fa-eye-slash');
+                    icon.classList.add('fa-eye');
+                }
+            });
+        }
         
         // Demo account functions
         function fillCredentials(username, password) {
-            document.getElementById('username').value = username;
-            document.getElementById('password').value = password;
-            
-            // Visual feedback
-            const form = document.querySelector('form');
-            form.style.animation = 'none';
-            form.offsetHeight; // Trigger reflow
-            form.style.animation = 'pulse 0.5s';
+            const usernameField = document.getElementById('username');
+            const passwordField = document.getElementById('password');
+            if (usernameField && passwordField) {
+                usernameField.value = username;
+                passwordField.value = password;
+                
+                // Visual feedback
+                const form = document.querySelector('form');
+                form.style.animation = 'none';
+                form.offsetHeight; // Trigger reflow
+                form.style.animation = 'pulse 0.5s';
+            }
         }
         
         function clearCredentials() {
-            document.getElementById('username').value = '';
-            document.getElementById('password').value = '';
-            document.getElementById('username').focus();
+            const usernameField = document.getElementById('username');
+            const passwordField = document.getElementById('password');
+            if (usernameField && passwordField) {
+                usernameField.value = '';
+                passwordField.value = '';
+                usernameField.focus();
+            }
         }
         
         // Form validation

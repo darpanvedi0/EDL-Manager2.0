@@ -26,5 +26,19 @@
         "denied_by": "admin",
         "denied_at": "2025-06-23T02:59:15+02:00",
         "admin_comment": "Denied"
+    },
+    {
+        "id": "req_6858ecb5d22157.67321643",
+        "entry": "test.com",
+        "type": "domain",
+        "comment": "",
+        "justification": "test",
+        "priority": "critical",
+        "submitted_by": "operator",
+        "submitted_at": "2025-06-23T07:57:09+02:00",
+        "status": "denied",
+        "denied_by": "approver",
+        "denied_at": "2025-06-23T07:57:25+02:00",
+        "admin_comment": "denied"
     }
 ]

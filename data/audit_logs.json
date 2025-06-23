@@ -45,5 +45,33 @@
         "user": "admin",
         "details": "Removed ip from denied list",
         "admin_comment": "Previously denied: Denied"
+    },
+    {
+        "id": "audit_6858ecb5d27464.72464711",
+        "timestamp": "2025-06-23T07:57:09+02:00",
+        "action": "submit",
+        "entry": "test.com",
+        "user": "operator",
+        "details": "Submitted domain request",
+        "request_id": "req_6858ecb5d22157.67321643"
+    },
+    {
+        "id": "audit_6858ecc5297677.70117619",
+        "timestamp": "2025-06-23T07:57:25+02:00",
+        "action": "deny",
+        "entry": "test.com",
+        "user": "approver",
+        "details": "Denyed domain request from operator",
+        "request_id": "req_6858ecb5d22157.67321643",
+        "admin_comment": "denied"
+    },
+    {
+        "id": "audit_6858ecdec694a5.00239469",
+        "timestamp": "2025-06-23T07:57:50+02:00",
+        "action": "remove_denial",
+        "entry": "test.com",
+        "user": "admin",
+        "details": "Removed domain from denied list",
+        "admin_comment": "Previously denied: denied"
     }
 ]
