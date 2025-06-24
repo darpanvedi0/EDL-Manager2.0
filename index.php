@@ -171,7 +171,37 @@ $login_time = $_SESSION['login_time'] ?? time();
                             <i class="fas fa-ban me-1"></i> Denied Entries
                         </a>
                     </li>
-2"></i> Audit Log
+                    <?php if (in_array('manage', $user_permissions)): ?>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="fas fa-cog me-1"></i> Admin
+                        </a>
+                        <ul class="dropdown-menu" aria-labelledby="adminDropdown">
+                            <li>
+                                <h6 class="dropdown-header">
+                                    <i class="fas fa-server text-primary me-1"></i> Integration
+                                </h6>
+                            </li>
+                            <li><a class="dropdown-item" href="pages/okta_config.php">
+                                <i class="fas fa-cloud text-primary me-2"></i> Okta SSO Configuration
+                                <small class="text-muted d-block">Configure Single Sign-On</small>
+                            </a></li>
+                            <li><a class="dropdown-item" href="pages/teams_config.php">
+                                <i class="fab fa-microsoft text-info me-2"></i> Teams Notifications
+                                <small class="text-muted d-block">Configure Teams webhooks</small>
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <h6 class="dropdown-header">
+                                    <i class="fas fa-database text-secondary me-1"></i> Data Management
+                                </h6>
+                            </li>
+                            <li><a class="dropdown-item" href="pages/denied_entries.php">
+                                <i class="fas fa-ban text-danger me-2"></i> Denied Entries
+                                <small class="text-muted d-block">View rejected requests</small>
+                            </a></li>
+                            <li><a class="dropdown-item" href="pages/audit_log.php">
+                                <i class="fas fa-clipboard-list text-warning me-2"></i> Audit Log
                                 <small class="text-muted d-block">System activity log</small>
                             </a></li>
                             <li><a class="dropdown-item" href="pages/user_management.php">
@@ -288,13 +318,7 @@ $login_time = $_SESSION['login_time'] ?? time();
             </div>
         </div>
         
-        <!-- Success Message -->
-        <div class="alert alert-success">
-            <i class="fas fa-check-circle me-2"></i>
-            <strong>Success!</strong> EDL Manager is now working correctly. 
-            You are logged in as <strong><?php echo htmlspecialchars($user_name); ?></strong> 
-            with <strong><?php echo ucfirst($user_role); ?></strong> permissions.
-        </div>
+
         
         <!-- Quick Actions -->
         <div class="card mb-4">
