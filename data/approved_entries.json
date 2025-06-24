@@ -28,5 +28,21 @@
         "admin_comment": "",
         "status": "active",
         "request_id": "req_685a134d193695.25843232"
+    },
+    {
+        "id": "app_685abf0acfedf8.74682726",
+        "entry": "3.3.3.3",
+        "type": "ip",
+        "comment": "",
+        "justification": "Test",
+        "priority": "medium",
+        "submitted_by": "admin",
+        "submitted_at": "2025-06-24T17:06:42+02:00",
+        "approved_by": "admin",
+        "approved_at": "2025-06-24T17:06:50+02:00",
+        "admin_comment": "Approved",
+        "status": "active",
+        "request_id": "req_685abf027ff475.49085437",
+        "servicenow_ticket": "INC1234567"
     }
 ]

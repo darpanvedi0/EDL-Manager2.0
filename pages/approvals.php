@@ -28,26 +28,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (in_array($action, ['approve', 'deny']) && !empty($request_id)) {
             $pending_requests = read_json_file(DATA_DIR . '/pending_requests.json');
             $request_found = false;
+            $request_to_process = null;
+            $request_key = null;
             
             // Find the request
             foreach ($pending_requests as $key => $request) {
-                if ($request['id'] === $request_id && $request['status'] === 'pending') {
+                if ($request['id'] === $request_id && (!isset($request['status']) || $request['status'] === 'pending')) {
                     $request_found = true;
+                    $request_to_process = $request;
+                    $request_key = $key;
+                    break;
+                }
+            }
+            
+            if ($request_found && $request_to_process) {
+                if ($action === 'approve') {
+                    // Validate the entry before approving
+                    $validation = validate_entry_comprehensive($request_to_process['entry'], $request_to_process['type']);
                     
-                    if ($action === 'approve') {
-                        // Validate the entry before approving
-                        $validation = validate_entry_comprehensive($request['entry'], $request['type']);
-                        
-                        if (!$validation['valid']) {
-                            $error_message = 'Cannot approve invalid entry: ' . $validation['error'];
-                            break;
-                        }
-                        
+                    if (!$validation['valid']) {
+                        $error_message = 'Cannot approve invalid entry: ' . $validation['error'];
+                    } else {
                         // Check if entry already exists in approved list
                         $approved_entries = read_json_file(DATA_DIR . '/approved_entries.json');
                         $exists = false;
                         foreach ($approved_entries as $existing) {
-                            if ($existing['entry'] === $request['entry'] && $existing['status'] === 'active') {
+                            if ($existing['entry'] === $request_to_process['entry'] && $existing['status'] === 'active') {
                                 $exists = true;
                                 break;
                             }
@@ -55,118 +61,135 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         
                         if ($exists) {
                             $error_message = 'Entry already exists in approved list.';
-                            break;
-                        }
-                        
-                        // Approve the request
-                        $approved_entry = [
-                            'id' => uniqid('app_', true),
-                            'entry' => $request['entry'],
-                            'type' => $request['type'],
-                            'comment' => $request['comment'],
-                            'justification' => $request['justification'],
-                            'priority' => $request['priority'],
-                            'submitted_by' => $request['submitted_by'],
-                            'submitted_at' => $request['submitted_at'],
-                            'approved_by' => $_SESSION['username'],
-                            'approved_at' => date('c'),
-                            'admin_comment' => $admin_comment,
-                            'status' => 'active',
-                            'request_id' => $request_id
-                        ];
-                        
-                        // Add to approved entries
-                        $approved_entries[] = $approved_entry;
-                        write_json_file(DATA_DIR . '/approved_entries.json', $approved_entries);
-                        
-                        // Update request status
-                        $pending_requests[$key]['status'] = 'approved';
-                        $pending_requests[$key]['approved_by'] = $_SESSION['username'];
-                        $pending_requests[$key]['approved_at'] = date('c');
-                        $pending_requests[$key]['admin_comment'] = $admin_comment;
-                        
-                        // Generate EDL files
-                        generate_edl_files();
-                        
-                        // Send Teams notification for approval (if Teams integration exists)
-                        if (function_exists('notify_teams_approved')) {
-                            try {
-                                notify_teams_approved($request, $_SESSION['username'], $admin_comment);
-                            } catch (Exception $e) {
-                                error_log('Teams notification failed: ' . $e->getMessage());
+                        } else {
+                            // Approve the request
+                            $approved_entry = [
+                                'id' => uniqid('app_', true),
+                                'entry' => $request_to_process['entry'],
+                                'type' => $request_to_process['type'],
+                                'comment' => $request_to_process['comment'] ?? '',
+                                'justification' => $request_to_process['justification'],
+                                'priority' => $request_to_process['priority'],
+                                'submitted_by' => $request_to_process['submitted_by'],
+                                'submitted_at' => $request_to_process['submitted_at'],
+                                'approved_by' => $_SESSION['username'],
+                                'approved_at' => date('c'),
+                                'admin_comment' => $admin_comment,
+                                'status' => 'active',
+                                'request_id' => $request_id
+                            ];
+                            
+                            // Add ServiceNow ticket if present
+                            if (isset($request_to_process['servicenow_ticket'])) {
+                                $approved_entry['servicenow_ticket'] = $request_to_process['servicenow_ticket'];
                             }
+                            
+                            // Add to approved entries
+                            $approved_entries[] = $approved_entry;
+                            write_json_file(DATA_DIR . '/approved_entries.json', $approved_entries);
+                            
+                            // REMOVE from pending requests instead of just updating status
+                            unset($pending_requests[$request_key]);
+                            $pending_requests = array_values($pending_requests); // Reset array keys
+                            write_json_file(DATA_DIR . '/pending_requests.json', $pending_requests);
+                            
+                            // Generate EDL files
+                            generate_edl_files();
+                            
+                            // Send Teams notification for approval (if Teams integration exists)
+                            if (function_exists('notify_teams_approved')) {
+                                try {
+                                    notify_teams_approved($request_to_process, $_SESSION['username'], $admin_comment);
+                                } catch (Exception $e) {
+                                    error_log('Teams notification failed: ' . $e->getMessage());
+                                }
+                            }
+                            
+                            // Add audit log
+                            $audit_logs = read_json_file(DATA_DIR . '/audit_logs.json');
+                            $audit_logs[] = [
+                                'id' => uniqid('audit_', true),
+                                'timestamp' => date('c'),
+                                'action' => 'approve',
+                                'entry' => $request_to_process['entry'],
+                                'user' => $_SESSION['username'],
+                                'details' => "Approved {$request_to_process['type']} request from {$request_to_process['submitted_by']}",
+                                'request_id' => $request_id,
+                                'admin_comment' => $admin_comment
+                            ];
+                            write_json_file(DATA_DIR . '/audit_logs.json', $audit_logs);
+                            
+                            show_flash("Request approved successfully. Entry added to {$request_to_process['type']} blocklist.", 'success');
                         }
-                        
-                        show_flash("Request approved successfully. Entry added to {$request['type']} blocklist.", 'success');
-                        
-                    } else if ($action === 'deny') {
-                        if (empty($admin_comment)) {
-                            $error_message = 'Reason is required when denying a request.';
-                            break;
-                        }
-                        
+                    }
+                    
+                } else if ($action === 'deny') {
+                    if (empty($admin_comment)) {
+                        $error_message = 'Reason is required when denying a request.';
+                    } else {
                         // Add to denied entries
                         $denied_entries = read_json_file(DATA_DIR . '/denied_entries.json');
                         $denied_entry = [
                             'id' => uniqid('den_', true),
-                            'entry' => $request['entry'],
-                            'type' => $request['type'],
-                            'comment' => $request['comment'],
-                            'justification' => $request['justification'],
-                            'priority' => $request['priority'],
-                            'submitted_by' => $request['submitted_by'],
-                            'submitted_at' => $request['submitted_at'],
+                            'entry' => $request_to_process['entry'],
+                            'type' => $request_to_process['type'],
+                            'comment' => $request_to_process['comment'] ?? '',
+                            'justification' => $request_to_process['justification'],
+                            'priority' => $request_to_process['priority'],
+                            'submitted_by' => $request_to_process['submitted_by'],
+                            'submitted_at' => $request_to_process['submitted_at'],
                             'denied_by' => $_SESSION['username'],
                             'denied_at' => date('c'),
                             'reason' => $admin_comment,
                             'request_id' => $request_id
                         ];
                         
+                        // Add ServiceNow ticket if present
+                        if (isset($request_to_process['servicenow_ticket'])) {
+                            $denied_entry['servicenow_ticket'] = $request_to_process['servicenow_ticket'];
+                        }
+                        
                         $denied_entries[] = $denied_entry;
                         write_json_file(DATA_DIR . '/denied_entries.json', $denied_entries);
                         
-                        // Update request status
-                        $pending_requests[$key]['status'] = 'denied';
-                        $pending_requests[$key]['denied_by'] = $_SESSION['username'];
-                        $pending_requests[$key]['denied_at'] = date('c');
-                        $pending_requests[$key]['admin_comment'] = $admin_comment;
+                        // REMOVE from pending requests instead of just updating status
+                        unset($pending_requests[$request_key]);
+                        $pending_requests = array_values($pending_requests); // Reset array keys
+                        write_json_file(DATA_DIR . '/pending_requests.json', $pending_requests);
                         
                         // Send Teams notification for denial (if Teams integration exists)
                         if (function_exists('notify_teams_denied')) {
                             try {
-                                notify_teams_denied($request, $_SESSION['username'], $admin_comment);
+                                notify_teams_denied($request_to_process, $_SESSION['username'], $admin_comment);
                             } catch (Exception $e) {
                                 error_log('Teams notification failed: ' . $e->getMessage());
                             }
                         }
                         
+                        // Add audit log
+                        $audit_logs = read_json_file(DATA_DIR . '/audit_logs.json');
+                        $audit_logs[] = [
+                            'id' => uniqid('audit_', true),
+                            'timestamp' => date('c'),
+                            'action' => 'deny',
+                            'entry' => $request_to_process['entry'],
+                            'user' => $_SESSION['username'],
+                            'details' => "Denied {$request_to_process['type']} request from {$request_to_process['submitted_by']}",
+                            'request_id' => $request_id,
+                            'admin_comment' => $admin_comment
+                        ];
+                        write_json_file(DATA_DIR . '/audit_logs.json', $audit_logs);
+                        
                         show_flash("Request denied. Reason provided to submitter.", 'success');
                     }
-                    
-                    // Save updated pending requests
-                    write_json_file(DATA_DIR . '/pending_requests.json', $pending_requests);
-                    
-                    // Add audit log
-                    $audit_logs = read_json_file(DATA_DIR . '/audit_logs.json');
-                    $audit_logs[] = [
-                        'id' => uniqid('audit_', true),
-                        'timestamp' => date('c'),
-                        'action' => $action,
-                        'entry' => $request['entry'],
-                        'user' => $_SESSION['username'],
-                        'details' => ucfirst($action) . "ed {$request['type']} request from {$request['submitted_by']}",
-                        'request_id' => $request_id,
-                        'admin_comment' => $admin_comment
-                    ];
-                    write_json_file(DATA_DIR . '/audit_logs.json', $audit_logs);
-                    
-                    // Redirect to prevent resubmission
+                }
+                
+                // Redirect to prevent resubmission
+                if (empty($error_message)) {
                     header('Location: approvals.php');
                     exit;
                 }
-            }
-            
-            if (!$request_found) {
+            } else {
                 $error_message = 'Request not found or already processed.';
             }
         } else {
@@ -175,11 +198,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Get all pending requests - ONLY pending status
-$pending_requests = read_json_file(DATA_DIR . '/pending_requests.json');
-$pending_requests = array_filter($pending_requests, function($r) {
-    return isset($r['status']) && $r['status'] === 'pending';
-});
+// Get all pending requests - with additional filtering to be safe
+$all_requests = read_json_file(DATA_DIR . '/pending_requests.json');
+$pending_requests = [];
+
+foreach ($all_requests as $request) {
+    // Only include if it's truly pending
+    if (!isset($request['status']) || $request['status'] === 'pending') {
+        // Double-check it doesn't have approval/denial markers
+        if (!isset($request['approved_by']) && !isset($request['denied_by'])) {
+            $pending_requests[] = $request;
+        }
+    }
+}
 
 // Sort by priority and date
 usort($pending_requests, function($a, $b) {
@@ -188,7 +219,7 @@ usort($pending_requests, function($a, $b) {
     $b_priority = $priority_order[$b['priority']] ?? 2;
     
     if ($a_priority === $b_priority) {
-        return strtotime($a['submitted_at']) - strtotime($b['submitted_at']);
+        return strtotime($b['submitted_at']) - strtotime($a['submitted_at']);
     }
     return $b_priority - $a_priority;
 });
@@ -384,6 +415,13 @@ require_once '../includes/header.php';
                 <div class="mb-3">
                     <h6 class="mb-1">Additional Comments:</h6>
                     <p class="mb-0 text-muted"><?php echo nl2br(htmlspecialchars($request['comment'])); ?></p>
+                </div>
+                <?php endif; ?>
+                
+                <?php if (!empty($request['servicenow_ticket'])): ?>
+                <div class="mb-3">
+                    <h6 class="mb-1">ServiceNow Ticket:</h6>
+                    <code><?php echo htmlspecialchars($request['servicenow_ticket']); ?></code>
                 </div>
                 <?php endif; ?>
                 

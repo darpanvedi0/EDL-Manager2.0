@@ -221,14 +221,14 @@ $user_permissions = $_SESSION['permissions'] ?? [];
                     </li>
                     <?php if (in_array('submit', $user_permissions)): ?>
                     <li class="nav-item">
-                        <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) === 'submit_request.php' ? 'active' : ''; ?>" href="<?php echo $base_path; ?><?php echo $is_in_pages ? '' : 'pages/'; ?>submit_request.php">
+                        <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) === 'submit_request.php' ? 'active' : ''; ?>" href="<?php echo $base_path; ?>pages/submit_request.php">
                             <i class="fas fa-plus me-1"></i> Submit Request
                         </a>
                     </li>
                     <?php endif; ?>
                     <?php if (in_array('approve', $user_permissions)): ?>
                     <li class="nav-item">
-                        <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) === 'approvals.php' ? 'active' : ''; ?>" href="<?php echo $base_path; ?><?php echo $is_in_pages ? '' : 'pages/'; ?>approvals.php">
+                        <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) === 'approvals.php' ? 'active' : ''; ?>" href="<?php echo $base_path; ?>pages/approvals.php">
                             <i class="fas fa-check-circle me-1"></i> Approvals
                             <?php if ($pending_count > 0): ?>
                                 <span class="badge bg-warning text-dark pending-count"><?php echo $pending_count; ?></span>
@@ -237,17 +237,17 @@ $user_permissions = $_SESSION['permissions'] ?? [];
                     </li>
                     <?php endif; ?>
                     <li class="nav-item">
-                        <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) === 'request_history.php' ? 'active' : ''; ?>" href="<?php echo $base_path; ?><?php echo $is_in_pages ? '' : 'pages/'; ?>request_history.php">
+                        <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) === 'request_history.php' ? 'active' : ''; ?>" href="<?php echo $base_path; ?>pages/request_history.php">
                             <i class="fas fa-history me-1"></i> My Requests
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) === 'edl_viewer.php' ? 'active' : ''; ?>" href="<?php echo $base_path; ?><?php echo $is_in_pages ? '' : 'pages/'; ?>edl_viewer.php">
+                        <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) === 'edl_viewer.php' ? 'active' : ''; ?>" href="<?php echo $base_path; ?>pages/edl_viewer.php">
                             <i class="fas fa-list me-1"></i> EDL Viewer
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) === 'denied_entries.php' ? 'active' : ''; ?>" href="<?php echo $base_path; ?><?php echo $is_in_pages ? '' : 'pages/'; ?>denied_entries.php">
+                        <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) === 'denied_entries.php' ? 'active' : ''; ?>" href="<?php echo $base_path; ?>pages/denied_entries.php">
                             <i class="fas fa-ban me-1"></i> Denied Entries
                         </a>
                     </li>
@@ -262,11 +262,11 @@ $user_permissions = $_SESSION['permissions'] ?? [];
                                     <i class="fas fa-server text-primary me-1"></i> Integration
                                 </h6>
                             </li>
-                            <li><a class="dropdown-item <?php echo basename($_SERVER['PHP_SELF']) === 'okta_config.php' ? 'active' : ''; ?>" href="<?php echo $base_path; ?><?php echo $is_in_pages ? '' : 'pages/'; ?>okta_config.php">
+                            <li><a class="dropdown-item <?php echo basename($_SERVER['PHP_SELF']) === 'okta_config.php' ? 'active' : ''; ?>" href="<?php echo $base_path; ?>pages/okta_config.php">
                                 <i class="fas fa-cloud text-primary me-2"></i> Okta SSO Configuration
                                 <small class="text-muted d-block">Configure Single Sign-On</small>
                             </a></li>
-                            <li><a class="dropdown-item <?php echo basename($_SERVER['PHP_SELF']) === 'teams_config.php' ? 'active' : ''; ?>" href="<?php echo $base_path; ?><?php echo $is_in_pages ? '' : 'pages/'; ?>teams_config.php">
+                            <li><a class="dropdown-item <?php echo basename($_SERVER['PHP_SELF']) === 'teams_config.php' ? 'active' : ''; ?>" href="<?php echo $base_path; ?>pages/teams_config.php">
                                 <i class="fab fa-microsoft text-info me-2"></i> Teams Notifications
                                 <small class="text-muted d-block">Configure Teams webhooks</small>
                             </a></li>
@@ -276,15 +276,15 @@ $user_permissions = $_SESSION['permissions'] ?? [];
                                     <i class="fas fa-database text-secondary me-1"></i> Data Management
                                 </h6>
                             </li>
-                            <li><a class="dropdown-item <?php echo basename($_SERVER['PHP_SELF']) === 'denied_entries.php' ? 'active' : ''; ?>" href="<?php echo $base_path; ?><?php echo $is_in_pages ? '' : 'pages/'; ?>denied_entries.php">
+                            <li><a class="dropdown-item <?php echo basename($_SERVER['PHP_SELF']) === 'denied_entries.php' ? 'active' : ''; ?>" href="<?php echo $base_path; ?>pages/denied_entries.php">
                                 <i class="fas fa-ban text-danger me-2"></i> Denied Entries
                                 <small class="text-muted d-block">View rejected requests</small>
                             </a></li>
-                            <li><a class="dropdown-item <?php echo basename($_SERVER['PHP_SELF']) === 'audit_log.php' ? 'active' : ''; ?>" href="<?php echo $base_path; ?><?php echo $is_in_pages ? '' : 'pages/'; ?>audit_log.php">
+                            <li><a class="dropdown-item <?php echo basename($_SERVER['PHP_SELF']) === 'audit_log.php' ? 'active' : ''; ?>" href="<?php echo $base_path; ?>pages/audit_log.php">
                                 <i class="fas fa-clipboard-list text-warning me-2"></i> Audit Log
                                 <small class="text-muted d-block">System activity log</small>
                             </a></li>
-                            <li><a class="dropdown-item <?php echo basename($_SERVER['PHP_SELF']) === 'user_management.php' ? 'active' : ''; ?>" href="<?php echo $base_path; ?><?php echo $is_in_pages ? '' : 'pages/'; ?>user_management.php">
+                            <li><a class="dropdown-item <?php echo basename($_SERVER['PHP_SELF']) === 'user_management.php' ? 'active' : ''; ?>" href="<?php echo $base_path; ?>pages/user_management.php">
                                 <i class="fas fa-users text-success me-2"></i> User Management
                                 <small class="text-muted d-block">Manage local accounts</small>
                             </a></li>
