@@ -1,5 +1,5 @@
 <?php
-// pages/okta_config.php - Simple Okta Configuration
+// pages/okta_config.php - Standardized Okta Configuration
 require_once '../config/config.php';
 require_once '../includes/functions.php';
 require_once '../includes/auth.php';
@@ -101,7 +101,11 @@ $user_email = $_SESSION['email'] ?? 'user@company.com';
 $user_role = $_SESSION['role'] ?? 'user';
 $user_permissions = $_SESSION['permissions'] ?? [];
 
-// Helper function
+// Get pending requests count for nav badge
+$pending_requests = read_json_file(DATA_DIR . '/pending_requests.json');
+$pending_count = count(array_filter($pending_requests, fn($r) => ($r['status'] ?? '') === 'pending'));
+
+// Helper function to test Okta connection
 function test_okta_connection($domain) {
     $url = "https://{$domain}/.well-known/openid_configuration";
     $ch = curl_init();
@@ -183,6 +187,92 @@ function test_okta_connection($domain) {
             margin: 1rem 0;
             border-left: 4px solid #007bff;
         }
+        .dropdown-menu {
+            border: none;
+            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+            border-radius: 10px;
+            animation: dropdownFadeIn 0.3s ease;
+        }
+        @keyframes dropdownFadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .dropdown-header {
+            font-weight: 600;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 0.5rem 1rem;
+            margin-bottom: 0.25rem;
+            border-bottom: 1px solid #e9ecef;
+        }
+        .dropdown-item {
+            padding: 0.75rem 1rem;
+            transition: all 0.2s ease;
+            border-radius: 5px;
+            margin: 2px 8px;
+        }
+        .dropdown-item:hover {
+            background-color: #f8f9fa;
+            transform: translateX(5px);
+        }
+        .dropdown-item.active {
+            background-color: #007bff;
+            color: white;
+        }
+        .dropdown-item small {
+            display: block;
+            font-size: 0.75rem;
+            opacity: 0.7;
+            margin-top: 2px;
+        }
+        .dropdown-divider {
+            margin: 0.5rem 0;
+            border-color: #e9ecef;
+        }
+        .badge {
+            border-radius: 50px;
+            font-weight: 500;
+            font-size: 0.75rem;
+            padding: 0.35em 0.65em;
+        }
+        .pending-count {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+        .btn {
+            border-radius: 8px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            border: none;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        .alert {
+            border: none;
+            border-radius: 10px;
+            border-left: 4px solid;
+        }
+        .alert-success {
+            border-left-color: #198754;
+            background-color: rgba(25, 135, 84, 0.1);
+        }
+        .alert-danger {
+            border-left-color: #dc3545;
+            background-color: rgba(220, 53, 69, 0.1);
+        }
     </style>
 </head>
 <body>
@@ -216,6 +306,9 @@ function test_okta_connection($domain) {
                     <li class="nav-item">
                         <a class="nav-link" href="approvals.php">
                             <i class="fas fa-check-circle me-1"></i> Approvals
+                            <?php if ($pending_count > 0): ?>
+                                <span class="badge bg-warning text-dark pending-count"><?php echo $pending_count; ?></span>
+                            <?php endif; ?>
                         </a>
                     </li>
                     <?php endif; ?>
@@ -224,33 +317,131 @@ function test_okta_connection($domain) {
                             <i class="fas fa-list me-1"></i> EDL Viewer
                         </a>
                     </li>
-                    <?php if (in_array('manage', $user_permissions)): ?>
+                    <li class="nav-item">
+                        <a class="nav-link" href="denied_entries.php">
+                            <i class="fas fa-ban me-1"></i> Denied Entries
+                        </a>
+                    </li>
+                    
+                    <!-- Downloads Dropdown -->
                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle active" href="#" data-bs-toggle="dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="downloadsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="fas fa-download me-1"></i> Downloads
+                        </a>
+                        <ul class="dropdown-menu" aria-labelledby="downloadsDropdown">
+                            <li>
+                                <h6 class="dropdown-header">
+                                    <i class="fas fa-shield-alt text-primary me-1"></i> Blocklist Files
+                                </h6>
+                            </li>
+                            <li><a class="dropdown-item" href="../edl-files/ip_blocklist.txt" target="_blank">
+                                <i class="fas fa-network-wired text-primary me-2"></i> IP Blocklist
+                                <small class="text-muted d-block">List of blocked IP addresses</small>
+                            </a></li>
+                            <li><a class="dropdown-item" href="../edl-files/domain_blocklist.txt" target="_blank">
+                                <i class="fas fa-globe text-success me-2"></i> Domain Blocklist
+                                <small class="text-muted d-block">List of blocked domains</small>
+                            </a></li>
+                            <li><a class="dropdown-item" href="../edl-files/url_blocklist.txt" target="_blank">
+                                <i class="fas fa-link text-info me-2"></i> URL Blocklist
+                                <small class="text-muted d-block">List of blocked URLs</small>
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <h6 class="dropdown-header">
+                                    <i class="fas fa-tools text-secondary me-1"></i> Tools
+                                </h6>
+                            </li>
+                            <li><a class="dropdown-item" href="#" onclick="downloadAllFiles()">
+                                <i class="fas fa-download text-warning me-2"></i> Download All Files
+                                <small class="text-muted d-block">ZIP archive of all blocklists</small>
+                            </a></li>
+                            <li><a class="dropdown-item" href="#" onclick="copyApiUrls()">
+                                <i class="fas fa-code text-secondary me-2"></i> Copy API URLs
+                                <small class="text-muted d-block">Direct URLs for automation</small>
+                            </a></li>
+                        </ul>
+                    </li>
+                    
+                    <?php if (in_array('manage', $user_permissions)): ?>
+                    <!-- Admin Dropdown -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle active" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="fas fa-cog me-1"></i> Admin
                         </a>
-                        <ul class="dropdown-menu">
+                        <ul class="dropdown-menu" aria-labelledby="adminDropdown">
+                            <li>
+                                <h6 class="dropdown-header">
+                                    <i class="fas fa-server text-primary me-1"></i> Integration
+                                </h6>
+                            </li>
                             <li><a class="dropdown-item active" href="okta_config.php">
-                                <i class="fas fa-cloud"></i> Okta SSO
+                                <i class="fas fa-cloud text-primary me-2"></i> Okta SSO Configuration
+                                <small class="text-muted d-block">Configure Single Sign-On</small>
+                            </a></li>
+                            <li><a class="dropdown-item" href="teams_config.php">
+                                <i class="fab fa-microsoft text-info me-2"></i> Teams Notifications
+                                <small class="text-muted d-block">Configure Teams webhooks</small>
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <h6 class="dropdown-header">
+                                    <i class="fas fa-database text-secondary me-1"></i> Data Management
+                                </h6>
+                            </li>
+                            <li><a class="dropdown-item" href="denied_entries.php">
+                                <i class="fas fa-ban text-danger me-2"></i> Denied Entries
+                                <small class="text-muted d-block">View rejected requests</small>
                             </a></li>
                             <li><a class="dropdown-item" href="audit_log.php">
-                                <i class="fas fa-clipboard-list"></i> Audit Log
+                                <i class="fas fa-clipboard-list text-warning me-2"></i> Audit Log
+                                <small class="text-muted d-block">System activity log</small>
                             </a></li>
+                            <li><a class="dropdown-item" href="user_management.php">
+                                <i class="fas fa-users text-success me-2"></i> User Management
+                                <small class="text-muted d-block">Manage local accounts</small>
+                            </a></li>
+                            <?php if (has_permission('audit')): ?>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <h6 class="dropdown-header">
+                                    <i class="fas fa-tools text-warning me-1"></i> System Tools
+                                </h6>
+                            </li>
+                            <li><a class="dropdown-item" href="#" onclick="regenerateEDLFiles()">
+                                <i class="fas fa-sync text-warning me-2"></i> Regenerate EDL Files
+                                <small class="text-muted d-block">Rebuild all blocklist files</small>
+                            </a></li>
+                            <li><a class="dropdown-item" href="#" onclick="exportSystemData()">
+                                <i class="fas fa-file-export text-success me-2"></i> Export System Data
+                                <small class="text-muted d-block">Backup configuration</small>
+                            </a></li>
+                            <?php endif; ?>
                         </ul>
                     </li>
                     <?php endif; ?>
                 </ul>
                 
                 <ul class="navbar-nav">
+                    <!-- User Menu -->
                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="fas fa-user me-1"></i>
                             <?php echo htmlspecialchars($user_name); ?>
                         </a>
-                        <ul class="dropdown-menu dropdown-menu-end">
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
                             <li class="dropdown-item-text">
                                 <div class="fw-bold"><?php echo htmlspecialchars($user_username); ?></div>
                                 <small class="text-muted"><?php echo htmlspecialchars($user_email); ?></small>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li class="dropdown-item-text">
+                                <small class="text-muted">
+                                    Role: <span class="badge bg-primary"><?php echo ucfirst($user_role); ?></span>
+                                    <?php if (isset($_SESSION['login_method'])): ?>
+                                    <br>Login: <span class="badge bg-secondary"><?php echo ucfirst($_SESSION['login_method']); ?></span>
+                                    <?php endif; ?>
+                                </small>
                             </li>
                             <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item" href="../logout.php">
@@ -342,7 +533,7 @@ function test_okta_connection($domain) {
         
         <!-- Configuration Form -->
         <div class="card">
-            <div class="card-header">
+            <div class="card-header bg-light">
                 <h5 class="mb-0">
                     <i class="fas fa-cloud text-primary me-2"></i> Okta Integration Settings
                 </h5>
@@ -524,7 +715,69 @@ function test_okta_connection($domain) {
                 </form>
             </div>
         </div>
+        
+        <!-- Help Card -->
+        <div class="card mt-4">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">
+                    <i class="fas fa-question-circle text-info me-2"></i> Setup Instructions
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6><i class="fas fa-cloud text-primary me-2"></i>Okta Configuration Steps:</h6>
+                        <ol class="list-group list-group-numbered">
+                            <li class="list-group-item">Create a new Web application in Okta</li>
+                            <li class="list-group-item">Copy the Client ID and Client Secret</li>
+                            <li class="list-group-item">Set the redirect URI in your Okta app</li>
+                            <li class="list-group-item">Configure group assignments</li>
+                            <li class="list-group-item">Test the connection</li>
+                        </ol>
+                    </div>
+                    <div class="col-md-6">
+                        <h6><i class="fas fa-users text-success me-2"></i>Role Permissions:</h6>
+                        <ul class="list-group">
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <span><i class="fas fa-user-shield text-danger me-2"></i>Admin</span>
+                                <span class="badge bg-danger rounded-pill">All Access</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <span><i class="fas fa-user-check text-success me-2"></i>Approver</span>
+                                <span class="badge bg-success rounded-pill">Approve + View</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <span><i class="fas fa-user-edit text-warning me-2"></i>Operator</span>
+                                <span class="badge bg-warning text-dark rounded-pill">Submit + View</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <span><i class="fas fa-user text-info me-2"></i>Viewer</span>
+                                <span class="badge bg-info rounded-pill">View Only</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
+    
+    <!-- Footer -->
+    <footer class="bg-light py-3 mt-5">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-6">
+                    <p class="mb-0 text-muted">
+                        &copy; <?php echo date('Y'); ?> <?php echo APP_NAME; ?> v<?php echo APP_VERSION; ?>
+                    </p>
+                </div>
+                <div class="col-md-6 text-end">
+                    <small class="text-muted">
+                        Last updated: <?php echo date('Y-m-d H:i:s'); ?>
+                    </small>
+                </div>
+            </div>
+        </div>
+    </footer>
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
@@ -550,16 +803,16 @@ function test_okta_connection($domain) {
             
             try {
                 document.execCommand('copy');
-                alert('Copied to clipboard');
+                showNotification('Copied to clipboard', 'success');
             } catch (err) {
-                alert('Failed to copy to clipboard');
+                showNotification('Failed to copy to clipboard', 'danger');
             }
         }
         
         function testConnection() {
             const domain = document.getElementById('okta_domain').value;
             if (!domain) {
-                alert('Please enter Okta domain first');
+                showNotification('Please enter Okta domain first', 'warning');
                 return;
             }
             
@@ -589,6 +842,154 @@ function test_okta_connection($domain) {
             document.body.appendChild(form);
             form.submit();
         }
+        
+        // Download all files functionality
+        function downloadAllFiles() {
+            const files = [
+                '../edl-files/ip_blocklist.txt',
+                '../edl-files/domain_blocklist.txt',
+                '../edl-files/url_blocklist.txt'
+            ];
+            
+            files.forEach((url, index) => {
+                setTimeout(() => {
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = url.split('/').pop();
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                }, index * 500);
+            });
+            
+            showNotification('Downloading all EDL files...', 'info');
+        }
+        
+        // Copy API URLs to clipboard
+        function copyApiUrls() {
+            const baseUrl = window.location.origin + '<?php echo dirname($_SERVER['PHP_SELF']); ?>/../';
+            const urls = [
+                'IP Blocklist: ' + baseUrl + 'edl-files/ip_blocklist.txt',
+                'Domain Blocklist: ' + baseUrl + 'edl-files/domain_blocklist.txt',
+                'URL Blocklist: ' + baseUrl + 'edl-files/url_blocklist.txt'
+            ].join('\n');
+            
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(urls).then(() => {
+                    showNotification('API URLs copied to clipboard', 'success');
+                });
+            } else {
+                const textArea = document.createElement('textarea');
+                textArea.value = urls;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                showNotification('API URLs copied to clipboard', 'success');
+            }
+        }
+        
+        // Regenerate EDL files
+        function regenerateEDLFiles() {
+            if (confirm('This will regenerate all EDL files from approved entries. Continue?')) {
+                fetch('../api/regenerate_edl.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showNotification('EDL files regenerated successfully', 'success');
+                    } else {
+                        showNotification('Failed to regenerate EDL files: ' + data.error, 'danger');
+                    }
+                })
+                .catch(error => {
+                    showNotification('Error regenerating EDL files', 'danger');
+                });
+            }
+        }
+        
+        // Export system data
+        function exportSystemData() {
+            const link = document.createElement('a');
+            link.href = '../api/export_data.php';
+            link.download = 'edl_manager_backup_' + new Date().toISOString().split('T')[0] + '.json';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showNotification('Exporting system data...', 'info');
+        }
+        
+        // Show notification
+        function showNotification(message, type = 'info') {
+            const alertClass = 'alert-' + type;
+            const notification = document.createElement('div');
+            notification.className = `alert ${alertClass} alert-dismissible position-fixed`;
+            notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+            
+            const icons = {
+                'success': 'fas fa-check-circle',
+                'danger': 'fas fa-exclamation-triangle',
+                'warning': 'fas fa-exclamation-circle',
+                'info': 'fas fa-info-circle'
+            };
+            const icon = icons[type] || icons['info'];
+            
+            notification.innerHTML = `
+                <i class="${icon} me-2"></i>
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.remove();
+                }
+            }, 4000);
+        }
+        
+        // Initialize tooltips
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl)
+        });
+        
+        // Auto-refresh pending count every 30 seconds
+        setInterval(() => {
+            fetch('../api/get_stats.php')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.pending !== undefined) {
+                        const pendingElements = document.querySelectorAll('.pending-count');
+                        pendingElements.forEach(el => {
+                            el.textContent = data.pending;
+                            el.style.display = data.pending > 0 ? 'inline' : 'none';
+                        });
+                    }
+                })
+                .catch(error => console.warn('Failed to update stats:', error));
+        }, 30000);
+        
+        // Add some interactivity on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Animate status cards on load
+            const statusCards = document.querySelectorAll('.card');
+            statusCards.forEach((card, index) => {
+                card.style.opacity = '0';
+                card.style.transform = 'translateY(20px)';
+                
+                setTimeout(() => {
+                    card.style.transition = 'all 0.5s ease';
+                    card.style.opacity = '1';
+                    card.style.transform = 'translateY(0)';
+                }, index * 100);
+            });
+        });
     </script>
 </body>
 </html>
