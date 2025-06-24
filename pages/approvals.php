@@ -13,11 +13,13 @@ $auth = new EDLAuth();
 $auth->require_permission('approve');
 
 $page_title = 'Approvals';
+$error_message = '';
+$success_message = '';
 
 // Handle approval/denial actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!validate_csrf_token($_POST['csrf_token'] ?? '')) {
-        show_flash('Invalid security token. Please try again.', 'danger');
+        $error_message = 'Invalid security token. Please try again.';
     } else {
         $action = sanitize_input($_POST['action'] ?? '');
         $request_id = sanitize_input($_POST['request_id'] ?? '');
@@ -37,7 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $validation = validate_entry_comprehensive($request['entry'], $request['type']);
                         
                         if (!$validation['valid']) {
-                            show_flash('Cannot approve invalid entry: ' . $validation['error'], 'danger');
+                            $error_message = 'Cannot approve invalid entry: ' . $validation['error'];
                             break;
                         }
                         
@@ -52,7 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
                         
                         if ($exists) {
-                            show_flash('Entry already exists in approved list.', 'danger');
+                            $error_message = 'Entry already exists in approved list.';
                             break;
                         }
                         
@@ -99,7 +101,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         
                     } else if ($action === 'deny') {
                         if (empty($admin_comment)) {
-                            show_flash('Reason is required when denying a request.', 'danger');
+                            $error_message = 'Reason is required when denying a request.';
                             break;
                         }
                         
@@ -165,18 +167,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             
             if (!$request_found) {
-                show_flash('Request not found or already processed.', 'danger');
+                $error_message = 'Request not found or already processed.';
             }
         } else {
-            show_flash('Invalid action or missing request ID.', 'danger');
+            $error_message = 'Invalid action or missing request ID.';
         }
     }
 }
 
-// Get all pending requests
+// Get all pending requests - ONLY pending status
 $pending_requests = read_json_file(DATA_DIR . '/pending_requests.json');
 $pending_requests = array_filter($pending_requests, function($r) {
-    return $r['status'] === 'pending';
+    return isset($r['status']) && $r['status'] === 'pending';
 });
 
 // Sort by priority and date
@@ -239,334 +241,276 @@ function generate_edl_files() {
     ];
 }
 
-// Include centralized header
-include '../includes/header.php';
+// Include the centralized header
+require_once '../includes/header.php';
 ?>
 
 <div class="container mt-4">
-    <!-- Page Header -->
-    <div class="page-header">
-        <h1 class="mb-2">
-            <i class="fas fa-check-circle me-2"></i>
-            Pending Approvals
-        </h1>
-        <p class="mb-0 opacity-75">Review and approve/deny EDL requests</p>
-    </div>
-    
-    <!-- Statistics -->
-    <div class="row mb-4">
-        <div class="col-lg-3 col-md-6 mb-3">
-            <div class="card stat-card bg-warning">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <h3 class="fw-bold mb-1 text-dark"><?php echo $stats['total_pending']; ?></h3>
-                            <p class="mb-0 text-dark">Total Pending</p>
-                        </div>
-                        <div>
-                            <i class="fas fa-clock stat-icon text-dark"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-lg-3 col-md-6 mb-3">
-            <div class="card stat-card bg-danger">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <h3 class="fw-bold mb-1"><?php echo $stats['critical']; ?></h3>
-                            <p class="mb-0">Critical</p>
-                        </div>
-                        <div>
-                            <i class="fas fa-exclamation-triangle stat-icon"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-lg-3 col-md-6 mb-3">
-            <div class="card stat-card bg-warning">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <h3 class="fw-bold mb-1 text-dark"><?php echo $stats['high']; ?></h3>
-                            <p class="mb-0 text-dark">High</p>
-                        </div>
-                        <div>
-                            <i class="fas fa-exclamation-circle stat-icon text-dark"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-lg-3 col-md-6 mb-3">
-            <div class="card stat-card bg-info">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <h3 class="fw-bold mb-1"><?php echo $stats['medium'] + $stats['low']; ?></h3>
-                            <p class="mb-0">Medium/Low</p>
-                        </div>
-                        <div>
-                            <i class="fas fa-info-circle stat-icon"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Pending Requests -->
-    <?php if (empty($pending_requests)): ?>
-    <div class="card">
-        <div class="card-body text-center py-5">
-            <i class="fas fa-check-double fa-3x text-success mb-3"></i>
-            <h4>All Caught Up!</h4>
-            <p class="text-muted">No pending requests to review at this time.</p>
-            <a href="../index.php" class="btn btn-primary">
-                <i class="fas fa-arrow-left"></i> Back to Dashboard
-            </a>
-        </div>
-    </div>
-    <?php else: ?>
-    <div class="row">
-        <?php foreach ($pending_requests as $request): ?>
-        <div class="col-lg-6 mb-4">
-            <div class="card request-card priority-<?php echo $request['priority']; ?>">
-                <div class="card-header bg-light d-flex justify-content-between align-items-center">
-                    <div>
-                        <span class="badge bg-<?php 
-                            echo $request['priority'] === 'critical' ? 'danger' : 
-                                 ($request['priority'] === 'high' ? 'warning text-dark' : 
-                                  ($request['priority'] === 'medium' ? 'info' : 'success')); 
-                        ?>">
-                            <?php echo strtoupper($request['priority']); ?> PRIORITY
-                        </span>
-                        <span class="badge bg-secondary ms-2">
-                            <i class="fas fa-<?php 
-                                echo $request['type'] === 'ip' ? 'network-wired' : 
-                                     ($request['type'] === 'domain' ? 'globe' : 'link'); 
-                            ?>"></i>
-                            <?php echo strtoupper($request['type']); ?>
-                        </span>
-                    </div>
-                    <small class="text-muted">
-                        <?php 
-                        $time = strtotime($request['submitted_at']);
-                        echo $time ? date('M j, H:i', $time) : 'Unknown';
-                        ?>
-                    </small>
-                </div>
-                <div class="card-body">
-                    <div class="mb-3">
-                        <h6 class="mb-1">Entry to Block:</h6>
-                        <code class="fs-6 user-select-all"><?php echo htmlspecialchars($request['entry']); ?></code>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <h6 class="mb-1">Business Justification:</h6>
-                        <p class="mb-0"><?php echo nl2br(htmlspecialchars($request['justification'])); ?></p>
-                    </div>
-                    
-                    <?php if (!empty($request['comment'])): ?>
-                    <div class="mb-3">
-                        <h6 class="mb-1">Additional Comments:</h6>
-                        <p class="mb-0 text-muted"><?php echo nl2br(htmlspecialchars($request['comment'])); ?></p>
-                    </div>
-                    <?php endif; ?>
-                    
-                    <div class="mb-3">
-                        <small class="text-muted">
-                            <strong>Submitted by:</strong> <?php echo htmlspecialchars($request['submitted_by']); ?><br>
-                            <strong>Request ID:</strong> <?php echo htmlspecialchars($request['id']); ?>
-                        </small>
-                    </div>
-                    
-                    <!-- Action Buttons -->
-                    <div class="d-flex gap-2">
-                        <button type="button" class="btn btn-success btn-sm" 
-                                data-bs-toggle="modal" 
-                                data-bs-target="#approveModal<?php echo md5($request['id']); ?>">
-                            <i class="fas fa-check"></i> Approve
-                        </button>
-                        <button type="button" class="btn btn-danger btn-sm" 
-                                data-bs-toggle="modal" 
-                                data-bs-target="#denyModal<?php echo md5($request['id']); ?>">
-                            <i class="fas fa-times"></i> Deny
-                        </button>
-                        <button type="button" class="btn btn-outline-info btn-sm" 
-                                onclick="copyToClipboard('<?php echo htmlspecialchars($request['entry']); ?>')">
-                            <i class="fas fa-copy"></i> Copy
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Approve Modal -->
-        <div class="modal fade" id="approveModal<?php echo md5($request['id']); ?>" tabindex="-1">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">
-                            <i class="fas fa-check-circle text-success"></i> Approve Request
-                        </h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <form method="POST">
-                        <div class="modal-body">
-                            <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
-                            <input type="hidden" name="action" value="approve">
-                            <input type="hidden" name="request_id" value="<?php echo htmlspecialchars($request['id']); ?>">
-                            
-                            <div class="alert alert-info">
-                                <strong>Entry:</strong> <code><?php echo htmlspecialchars($request['entry']); ?></code><br>
-                                <strong>Type:</strong> <?php echo strtoupper($request['type']); ?><br>
-                                <strong>Submitted by:</strong> <?php echo htmlspecialchars($request['submitted_by']); ?>
-                            </div>
-                            
-                            <div class="mb-3">
-                                <label for="admin_comment_approve" class="form-label">Approval Comments (optional):</label>
-                                <textarea class="form-control" name="admin_comment" id="admin_comment_approve" 
-                                          rows="3" placeholder="Any notes about this approval..."></textarea>
-                            </div>
-                            
-                            <p class="text-success">
-                                <i class="fas fa-info-circle"></i>
-                                This entry will be added to the <?php echo $request['type']; ?> blocklist and EDL files will be updated.
-                            </p>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                            <button type="submit" class="btn btn-success">
-                                <i class="fas fa-check"></i> Approve Request
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Deny Modal -->
-        <div class="modal fade" id="denyModal<?php echo md5($request['id']); ?>" tabindex="-1">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">
-                            <i class="fas fa-times-circle text-danger"></i> Deny Request
-                        </h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <form method="POST">
-                        <div class="modal-body">
-                            <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
-                            <input type="hidden" name="action" value="deny">
-                            <input type="hidden" name="request_id" value="<?php echo htmlspecialchars($request['id']); ?>">
-                            
-                            <div class="alert alert-warning">
-                                <strong>Entry:</strong> <code><?php echo htmlspecialchars($request['entry']); ?></code><br>
-                                <strong>Type:</strong> <?php echo strtoupper($request['type']); ?><br>
-                                <strong>Submitted by:</strong> <?php echo htmlspecialchars($request['submitted_by']); ?>
-                            </div>
-                            
-                            <div class="mb-3">
-                                <label for="admin_comment_deny" class="form-label">
-                                    Reason for Denial <span class="text-danger">*</span>
-                                </label>
-                                <textarea class="form-control" name="admin_comment" id="admin_comment_deny" 
-                                          rows="4" required
-                                          placeholder="Explain why this request is being denied..."></textarea>
-                                <div class="form-text">This reason will be provided to the submitter.</div>
-                            </div>
-                            
-                            <p class="text-danger">
-                                <i class="fas fa-exclamation-triangle"></i>
-                                This request will be denied and moved to the denied entries list.
-                            </p>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                            <button type="submit" class="btn btn-danger">
-                                <i class="fas fa-times"></i> Deny Request
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
-        <?php endforeach; ?>
-    </div>
-    <?php endif; ?>
+
+<?php if ($error_message): ?>
+<div class="alert alert-danger alert-dismissible fade show">
+    <i class="fas fa-exclamation-triangle"></i>
+    <?php echo htmlspecialchars($error_message); ?>
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+<?php endif; ?>
+
+<!-- Page Header -->
+<div class="page-header">
+    <h1 class="mb-2">
+        <i class="fas fa-check-circle me-2"></i>
+        Pending Approvals
+    </h1>
+    <p class="mb-0 opacity-75">Review and approve/deny EDL requests</p>
 </div>
 
-<?php include '../includes/footer.php'; ?>
+<!-- Statistics -->
+<div class="row mb-4">
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="card stat-card bg-warning">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h3 class="fw-bold mb-1 text-dark"><?php echo $stats['total_pending']; ?></h3>
+                        <p class="mb-0 text-dark">Total Pending</p>
+                    </div>
+                    <div>
+                        <i class="fas fa-clock stat-icon text-dark"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="card stat-card bg-danger">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h3 class="fw-bold mb-1"><?php echo $stats['critical']; ?></h3>
+                        <p class="mb-0">Critical</p>
+                    </div>
+                    <div>
+                        <i class="fas fa-exclamation-triangle stat-icon"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="card stat-card bg-warning">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h3 class="fw-bold mb-1 text-dark"><?php echo $stats['high']; ?></h3>
+                        <p class="mb-0 text-dark">High</p>
+                    </div>
+                    <div>
+                        <i class="fas fa-exclamation-circle stat-icon text-dark"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="card stat-card bg-info">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h3 class="fw-bold mb-1"><?php echo $stats['medium'] + $stats['low']; ?></h3>
+                        <p class="mb-0">Medium/Low</p>
+                    </div>
+                    <div>
+                        <i class="fas fa-info-circle stat-icon"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
-<script>
-// Copy to clipboard function
-function copyToClipboard(text) {
-    if (navigator.clipboard) {
-        navigator.clipboard.writeText(text).then(() => {
-            showNotification('Copied to clipboard: ' + text, 'success');
-        }).catch(() => {
-            fallbackCopy(text);
-        });
-    } else {
-        fallbackCopy(text);
-    }
-}
-
-function fallbackCopy(text) {
-    const textArea = document.createElement('textarea');
-    textArea.value = text;
-    textArea.style.position = 'fixed';
-    textArea.style.left = '-999999px';
-    document.body.appendChild(textArea);
-    textArea.select();
+<!-- Pending Requests -->
+<?php if (empty($pending_requests)): ?>
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="fas fa-check-double fa-3x text-success mb-3"></i>
+        <h4>All Caught Up!</h4>
+        <p class="text-muted">No pending requests to review at this time.</p>
+        <a href="../index.php" class="btn btn-primary">
+            <i class="fas fa-arrow-left"></i> Back to Dashboard
+        </a>
+    </div>
+</div>
+<?php else: ?>
+<div class="row">
+    <?php foreach ($pending_requests as $request): ?>
+    <div class="col-lg-6 mb-4">
+        <div class="card request-card priority-<?php echo $request['priority']; ?>">
+            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                <div>
+                    <span class="badge bg-<?php 
+                        echo $request['priority'] === 'critical' ? 'danger' : 
+                             ($request['priority'] === 'high' ? 'warning text-dark' : 
+                              ($request['priority'] === 'medium' ? 'info' : 'success')); 
+                    ?>">
+                        <?php echo strtoupper($request['priority']); ?> PRIORITY
+                    </span>
+                    <span class="badge bg-secondary ms-2">
+                        <i class="fas fa-<?php 
+                            echo $request['type'] === 'ip' ? 'network-wired' : 
+                                 ($request['type'] === 'domain' ? 'globe' : 'link'); 
+                        ?>"></i>
+                        <?php echo strtoupper($request['type']); ?>
+                    </span>
+                </div>
+                <small class="text-muted">
+                    <?php 
+                    $time = strtotime($request['submitted_at']);
+                    echo $time ? date('M j, H:i', $time) : 'Unknown';
+                    ?>
+                </small>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <h6 class="mb-1">Entry to Block:</h6>
+                    <code class="fs-6 user-select-all"><?php echo htmlspecialchars($request['entry']); ?></code>
+                </div>
+                
+                <div class="mb-3">
+                    <h6 class="mb-1">Business Justification:</h6>
+                    <p class="mb-0"><?php echo nl2br(htmlspecialchars($request['justification'])); ?></p>
+                </div>
+                
+                <?php if (!empty($request['comment'])): ?>
+                <div class="mb-3">
+                    <h6 class="mb-1">Additional Comments:</h6>
+                    <p class="mb-0 text-muted"><?php echo nl2br(htmlspecialchars($request['comment'])); ?></p>
+                </div>
+                <?php endif; ?>
+                
+                <div class="mb-3">
+                    <small class="text-muted">
+                        <strong>Submitted by:</strong> <?php echo htmlspecialchars($request['submitted_by']); ?><br>
+                        <strong>Request ID:</strong> <?php echo htmlspecialchars($request['id']); ?>
+                    </small>
+                </div>
+                
+                <!-- Action Buttons -->
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-success btn-sm" 
+                            data-bs-toggle="modal" 
+                            data-bs-target="#approveModal<?php echo md5($request['id']); ?>">
+                        <i class="fas fa-check"></i> Approve
+                    </button>
+                    <button type="button" class="btn btn-danger btn-sm" 
+                            data-bs-toggle="modal" 
+                            data-bs-target="#denyModal<?php echo md5($request['id']); ?>">
+                        <i class="fas fa-times"></i> Deny
+                    </button>
+                    <button type="button" class="btn btn-outline-info btn-sm" 
+                            onclick="copyToClipboard('<?php echo htmlspecialchars($request['entry']); ?>')">
+                        <i class="fas fa-copy"></i> Copy
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
     
-    try {
-        document.execCommand('copy');
-        showNotification('Copied to clipboard: ' + text, 'success');
-    } catch (err) {
-        showNotification('Failed to copy to clipboard', 'danger');
-    }
+    <!-- Approve Modal -->
+    <div class="modal fade" id="approveModal<?php echo md5($request['id']); ?>" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-check-circle text-success"></i> Approve Request
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form method="POST">
+                    <div class="modal-body">
+                        <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                        <input type="hidden" name="action" value="approve">
+                        <input type="hidden" name="request_id" value="<?php echo htmlspecialchars($request['id']); ?>">
+                        
+                        <div class="alert alert-info">
+                            <strong>Entry:</strong> <code><?php echo htmlspecialchars($request['entry']); ?></code><br>
+                            <strong>Type:</strong> <?php echo strtoupper($request['type']); ?><br>
+                            <strong>Submitted by:</strong> <?php echo htmlspecialchars($request['submitted_by']); ?>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="admin_comment_approve" class="form-label">Approval Comments (optional):</label>
+                            <textarea class="form-control" name="admin_comment" id="admin_comment_approve" 
+                                      rows="3" placeholder="Any notes about this approval..."></textarea>
+                        </div>
+                        
+                        <p class="text-success">
+                            <i class="fas fa-info-circle"></i>
+                            This entry will be added to the <?php echo $request['type']; ?> blocklist and EDL files will be updated.
+                        </p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-success">
+                            <i class="fas fa-check"></i> Approve Request
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
     
-    document.body.removeChild(textArea);
-}
+    <!-- Deny Modal -->
+    <div class="modal fade" id="denyModal<?php echo md5($request['id']); ?>" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-times-circle text-danger"></i> Deny Request
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form method="POST">
+                    <div class="modal-body">
+                        <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                        <input type="hidden" name="action" value="deny">
+                        <input type="hidden" name="request_id" value="<?php echo htmlspecialchars($request['id']); ?>">
+                        
+                        <div class="alert alert-warning">
+                            <strong>Entry:</strong> <code><?php echo htmlspecialchars($request['entry']); ?></code><br>
+                            <strong>Type:</strong> <?php echo strtoupper($request['type']); ?><br>
+                            <strong>Submitted by:</strong> <?php echo htmlspecialchars($request['submitted_by']); ?>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="admin_comment_deny" class="form-label">
+                                Reason for Denial <span class="text-danger">*</span>
+                            </label>
+                            <textarea class="form-control" name="admin_comment" id="admin_comment_deny" 
+                                      rows="4" required
+                                      placeholder="Explain why this request is being denied..."></textarea>
+                            <div class="form-text">This reason will be provided to the submitter.</div>
+                        </div>
+                        
+                        <p class="text-danger">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            This request will be denied and moved to the denied entries list.
+                        </p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-danger">
+                            <i class="fas fa-times"></i> Deny Request
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <?php endforeach; ?>
+</div>
+<?php endif; ?>
 
-// Add some interactivity
-document.addEventListener('DOMContentLoaded', function() {
-    // Animate stats cards on load
-    const statCards = document.querySelectorAll('.stat-card');
-    statCards.forEach((card, index) => {
-        card.style.opacity = '0';
-        card.style.transform = 'translateY(20px)';
-        
-        setTimeout(() => {
-            card.style.transition = 'all 0.5s ease';
-            card.style.opacity = '1';
-            card.style.transform = 'translateY(0)';
-        }, index * 100);
-    });
-    
-    // Auto-refresh page every 60 seconds to check for new requests
-    setTimeout(() => {
-        window.location.reload();
-    }, 60000);
-});
-</script>
+</div>
+<!-- End container -->
 
-<style>
-.priority-critical { border-left: 4px solid #dc3545; }
-.priority-high { border-left: 4px solid #fd7e14; }
-.priority-medium { border-left: 4px solid #ffc107; }
-.priority-low { border-left: 4px solid #28a745; }
-.request-card {
-    transition: all 0.3s ease;
-    border-radius: 10px;
-}
-.request-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
-}
-</style>
+<?php require_once '../includes/footer.php'; ?>
