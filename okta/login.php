@@ -44,5 +44,3 @@ function get_app_base_path() {
     return '/';
 }
 ?>
-
-<?php

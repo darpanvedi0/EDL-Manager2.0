@@ -73,5 +73,51 @@
         "user": "admin",
         "details": "Removed domain from denied list",
         "admin_comment": "Previously denied: denied"
+    },
+    {
+        "id": "audit_685a0a046247e5.24542494",
+        "timestamp": "2025-06-24T04:14:28+02:00",
+        "action": "export_data",
+        "entry": "System Data",
+        "user": "admin",
+        "details": "Exported system data backup"
+    },
+    {
+        "id": "audit_685a134d196a89.29998342",
+        "timestamp": "2025-06-24T04:54:05+02:00",
+        "action": "submit",
+        "entry": "1.1.1.5",
+        "user": "admin",
+        "details": "Submitted ip request (ServiceNow: CHG1234567)",
+        "request_id": "req_685a134d193695.25843232",
+        "servicenow_ticket": "CHG1234567"
+    },
+    {
+        "id": "audit_685a1352d876b5.58179836",
+        "timestamp": "2025-06-24T04:54:10+02:00",
+        "action": "approve",
+        "entry": "1.1.1.5",
+        "user": "admin",
+        "details": "Approveed ip request from admin",
+        "request_id": "req_685a134d193695.25843232",
+        "admin_comment": ""
+    },
+    {
+        "id": "audit_685a1368838883.24793364",
+        "timestamp": "2025-06-24T04:54:32+02:00",
+        "action": "manual_denial",
+        "entry": "1.1.1.1",
+        "user": "admin",
+        "details": "Manually added ip to denied list",
+        "admin_comment": "denied"
+    },
+    {
+        "id": "audit_685a1373c30a61.20291791",
+        "timestamp": "2025-06-24T04:54:43+02:00",
+        "action": "remove_denial",
+        "entry": "1.1.1.1",
+        "user": "admin",
+        "details": "Removed ip from denied list",
+        "admin_comment": "Previously denied: denied"
     }
 ]

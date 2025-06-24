@@ -2,6 +2,7 @@
 require_once '../config/config.php';
 require_once '../includes/functions.php';
 require_once '../includes/auth.php';
+require_once '../includes/validation.php';
 
 // Load Teams notifications if file exists (optional)
 if (file_exists('../includes/teams_notifications.php')) {
@@ -24,12 +25,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $comment = sanitize_input($_POST['comment'] ?? '');
         $justification = sanitize_input($_POST['justification'] ?? '');
         $priority = sanitize_input($_POST['priority'] ?? 'medium');
+        $servicenow_ticket = sanitize_input($_POST['servicenow_ticket'] ?? '');
         
         $errors = [];
         
         // Validate required fields
         if (empty($entry)) $errors[] = 'Entry is required';
         if (empty($justification)) $errors[] = 'Justification is required';
+        if (empty($servicenow_ticket)) $errors[] = 'ServiceNow ticket is required';
+        
+        // Validate ServiceNow ticket format
+        if (!empty($servicenow_ticket)) {
+            $snow_validation = validate_snow_ticket($servicenow_ticket);
+            if (!$snow_validation['valid']) {
+                $errors[] = $snow_validation['error'];
+            }
+        }
         
         // Auto-detect type if not specified
         if (empty($type) || $type === 'auto') {
@@ -94,6 +105,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'comment' => $comment,
                 'justification' => $justification,
                 'priority' => $priority,
+                'servicenow_ticket' => $servicenow_ticket,
                 'submitted_by' => $_SESSION['username'],
                 'submitted_at' => date('c'),
                 'status' => 'pending'
@@ -112,8 +124,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'action' => 'submit',
                     'entry' => $entry,
                     'user' => $_SESSION['username'],
-                    'details' => "Submitted {$type} request",
-                    'request_id' => $request['id']
+                    'details' => "Submitted {$type} request (ServiceNow: {$servicenow_ticket})",
+                    'request_id' => $request['id'],
+                    'servicenow_ticket' => $servicenow_ticket
                 ];
                 write_json_file(DATA_DIR . '/audit_logs.json', $logs);
                 
@@ -212,6 +225,22 @@ $flash = get_flash();
             border-radius: 15px;
             padding: 2rem;
             margin-bottom: 2rem;
+        }
+        .required-field {
+            color: #dc3545;
+        }
+        .form-control:invalid {
+            border-color: #dc3545;
+        }
+        .form-control:valid {
+            border-color: #198754;
+        }
+        .servicenow-help {
+            background-color: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 1rem;
+            border-radius: 0 8px 8px 0;
+            margin-top: 0.5rem;
         }
     </style>
 </head>
@@ -376,7 +405,7 @@ $flash = get_flash();
                                 <div class="col-md-8">
                                     <div class="mb-3">
                                         <label for="entry" class="form-label">
-                                            Entry to Block <span class="text-danger">*</span>
+                                            Entry to Block <span class="required-field">*</span>
                                         </label>
                                         <input type="text" class="form-control" id="entry" name="entry" 
                                                value="<?php echo htmlspecialchars($_POST['entry'] ?? ''); ?>"
@@ -391,7 +420,7 @@ $flash = get_flash();
                                 <div class="col-md-4">
                                     <div class="mb-3">
                                         <label for="type" class="form-label">
-                                            Type <span class="text-danger">*</span>
+                                            Type <span class="required-field">*</span>
                                         </label>
                                         <select class="form-select" id="type" name="type" required>
                                             <option value="auto" <?php echo ($_POST['type'] ?? 'auto') === 'auto' ? 'selected' : ''; ?>>
@@ -431,11 +460,29 @@ $flash = get_flash();
                                         </select>
                                     </div>
                                 </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="servicenow_ticket" class="form-label">
+                                            ServiceNow Ticket <span class="required-field">*</span>
+                                        </label>
+                                        <input type="text" class="form-control" id="servicenow_ticket" name="servicenow_ticket" 
+                                               value="<?php echo htmlspecialchars($_POST['servicenow_ticket'] ?? ''); ?>"
+                                               placeholder="INC1234567, REQ1234567, etc."
+                                               pattern="^(INC|REQ|CHG|RITM|TASK|SCTASK)[0-9]{7}$"
+                                               required>
+                                        <div class="servicenow-help">
+                                            <small>
+                                                <i class="fas fa-info-circle text-primary me-1"></i>
+                                                <strong>Required format:</strong> INC1234567, REQ1234567, CHG1234567, RITM1234567, TASK1234567, or SCTASK1234567
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                             
                             <div class="mb-3">
                                 <label for="justification" class="form-label">
-                                    Business Justification <span class="text-danger">*</span>
+                                    Business Justification <span class="required-field">*</span>
                                 </label>
                                 <textarea class="form-control" id="justification" name="justification" 
                                           rows="4" required
@@ -499,6 +546,48 @@ $flash = get_flash();
                     </div>
                 </div>
                 
+                <!-- ServiceNow Ticket Guidelines -->
+                <div class="card mt-3">
+                    <div class="card-header bg-light">
+                        <h6 class="mb-0">
+                            <i class="fas fa-ticket-alt text-warning"></i> ServiceNow Ticket Guidelines
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <h6><i class="fas fa-exclamation-triangle text-danger"></i> Incident:</h6>
+                            <code class="small d-block">INC1234567</code>
+                            <small class="text-muted">For security incidents</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <h6><i class="fas fa-clipboard-list text-primary"></i> Request:</h6>
+                            <code class="small d-block">REQ1234567</code>
+                            <small class="text-muted">For service requests</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <h6><i class="fas fa-wrench text-info"></i> Change:</h6>
+                            <code class="small d-block">CHG1234567</code>
+                            <small class="text-muted">For change requests</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <h6><i class="fas fa-tasks text-secondary"></i> Other:</h6>
+                            <code class="small d-block">RITM1234567</code>
+                            <code class="small d-block">TASK1234567</code>
+                            <code class="small d-block">SCTASK1234567</code>
+                        </div>
+                        
+                        <div class="alert alert-warning">
+                            <small>
+                                <i class="fas fa-info-circle"></i>
+                                <strong>Note:</strong> ServiceNow ticket is mandatory and will be included in all logs and notifications.
+                            </small>
+                        </div>
+                    </div>
+                </div>
+                
                 <!-- Recent Requests -->
                 <div class="card mt-3">
                     <div class="card-header bg-light">
@@ -522,6 +611,9 @@ $flash = get_flash();
                                             $time = strtotime($request['submitted_at']);
                                             echo $time ? date('M j, H:i', $time) : 'Unknown';
                                             ?>
+                                            <?php if (!empty($request['servicenow_ticket'])): ?>
+                                                <br><span class="badge bg-info"><?php echo htmlspecialchars($request['servicenow_ticket']); ?></span>
+                                            <?php endif; ?>
                                         </small>
                                     </div>
                                     <span class="badge <?php 
@@ -602,6 +694,27 @@ $flash = get_flash();
             }
         });
         
+        // ServiceNow ticket validation
+        document.getElementById('servicenow_ticket').addEventListener('input', function() {
+            const ticket = this.value.trim().toUpperCase();
+            const pattern = /^(INC|REQ|CHG|RITM|TASK|SCTASK)[0-9]{7}$/;
+            
+            if (ticket && !pattern.test(ticket)) {
+                this.setCustomValidity('Invalid ServiceNow ticket format. Use: INC1234567, REQ1234567, etc.');
+                this.classList.add('is-invalid');
+                this.classList.remove('is-valid');
+            } else if (ticket) {
+                this.setCustomValidity('');
+                this.classList.remove('is-invalid');
+                this.classList.add('is-valid');
+                // Auto-format to uppercase
+                this.value = ticket;
+            } else {
+                this.setCustomValidity('ServiceNow ticket is required');
+                this.classList.remove('is-valid', 'is-invalid');
+            }
+        });
+        
         // Function to check denied entries via AJAX
         function checkDeniedEntries(entry, type) {
             fetch('../api/check_denied.php', {
@@ -673,6 +786,17 @@ $flash = get_flash();
                         return false;
                     }
                     
+                    // Validate ServiceNow ticket
+                    const ticket = document.getElementById('servicenow_ticket').value.trim();
+                    const pattern = /^(INC|REQ|CHG|RITM|TASK|SCTASK)[0-9]{7}$/;
+                    if (!pattern.test(ticket)) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        showNotification('Invalid ServiceNow ticket format', 'danger');
+                        document.getElementById('servicenow_ticket').focus();
+                        return false;
+                    }
+                    
                     if (!form.checkValidity()) {
                         event.preventDefault();
                         event.stopPropagation();
@@ -707,6 +831,11 @@ $flash = get_flash();
         var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
         var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
             return new bootstrap.Tooltip(tooltipTriggerEl)
+        });
+        
+        // Auto-format ServiceNow ticket to uppercase on blur
+        document.getElementById('servicenow_ticket').addEventListener('blur', function() {
+            this.value = this.value.toUpperCase();
         });
     </script>
 </body>

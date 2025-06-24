@@ -1,7 +1,7 @@
- </main>
+</main>
     
     <!-- Footer -->
-    <footer class="bg-light py-3 mt-auto">
+    <footer class="bg-light py-3 mt-5">
         <div class="container">
             <div class="row">
                 <div class="col-md-6">
@@ -17,11 +17,6 @@
             </div>
         </div>
     </footer>
-    
-    <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-    <!-- Custom JS -->
-    <script src="<?php echo $base_path; ?>assets/js/main.js"></script>
     
     <!-- Page-specific JavaScript -->
     <?php if (isset($page_js)): ?>

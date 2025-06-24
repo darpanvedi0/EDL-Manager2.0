@@ -13,5 +13,20 @@
         "admin_comment": "",
         "status": "active",
         "request_id": "req_68582aedc5b672.43860503"
+    },
+    {
+        "id": "app_685a1352d62775.66950546",
+        "entry": "1.1.1.5",
+        "type": "ip",
+        "comment": "",
+        "justification": "Test",
+        "priority": "medium",
+        "submitted_by": "admin",
+        "submitted_at": "2025-06-24T04:54:05+02:00",
+        "approved_by": "admin",
+        "approved_at": "2025-06-24T04:54:10+02:00",
+        "admin_comment": "",
+        "status": "active",
+        "request_id": "req_685a134d193695.25843232"
     }
 ]

@@ -40,5 +40,20 @@
         "denied_by": "approver",
         "denied_at": "2025-06-23T07:57:25+02:00",
         "admin_comment": "denied"
+    },
+    {
+        "id": "req_685a134d193695.25843232",
+        "entry": "1.1.1.5",
+        "type": "ip",
+        "comment": "",
+        "justification": "Test",
+        "priority": "medium",
+        "servicenow_ticket": "CHG1234567",
+        "submitted_by": "admin",
+        "submitted_at": "2025-06-24T04:54:05+02:00",
+        "status": "approved",
+        "approved_by": "admin",
+        "approved_at": "2025-06-24T04:54:10+02:00",
+        "admin_comment": ""
     }
 ]
