@@ -1,1 +1,10 @@
-[]
+[
+    {
+        "id": "audit_685c148cd72ff9.30241543",
+        "timestamp": "2025-06-25T17:23:56+02:00",
+        "action": "ssl_config_update",
+        "entry": "SSL\/TLS Configuration",
+        "user": "admin",
+        "details": "Updated SSL\/TLS configuration - Enabled: No"
+    }
+]

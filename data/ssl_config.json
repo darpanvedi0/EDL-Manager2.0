@@ -1,0 +1,20 @@
+{
+    "enabled": false,
+    "force_https": true,
+    "domain_name": "localhost",
+    "certificate_path": "\/etc\/ssl\/certs\/edl-manager.crt",
+    "private_key_path": "\/etc\/ssl\/private\/edl-manager.key",
+    "certificate_chain_path": "\/etc\/ssl\/certs\/edl-manager-chain.crt",
+    "ssl_protocols": [
+        "TLSv1.2",
+        "TLSv1.3"
+    ],
+    "cipher_suites": "ECDHE+AESGCM:ECDHE+CHACHA20:DHE+AESGCM:DHE+CHACHA20:!aNULL:!MD5:!DSS",
+    "hsts_enabled": true,
+    "hsts_max_age": 31536000,
+    "edl_http_port": 80,
+    "edl_https_redirect": false,
+    "auto_redirect_http": true,
+    "updated_at": "2025-06-25T17:23:56+02:00",
+    "updated_by": "admin"
+}

@@ -47,7 +47,7 @@ function isActive($page_name, $current_page, $current_dir = '') {
 }
 
 // Admin pages for dropdown highlighting
-$admin_pages = ['okta_config.php', 'teams_config.php', 'ssl_config.php', 'audit_log.php', 'user_management.php'];
+$admin_pages = ['okta_config.php', 'teams_config.php', 'ssl_config.php', 'audit_log.php'];
 $is_admin_page_active = in_array($current_page, $admin_pages);
 ?>
 <!DOCTYPE html>
@@ -339,7 +339,7 @@ $is_admin_page_active = in_array($current_page, $admin_pages);
 <body>
     <!-- Navigation -->
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
-        <div class="container">
+        <div class="container-fluid" style="max-width: 1200px; margin: 0 auto; padding: 0 1rem;">
             <a class="navbar-brand" href="<?php echo $base_path; ?>index.php">
                 <i class="fas fa-shield-alt"></i>
                 <?php echo APP_NAME; ?>
@@ -442,10 +442,6 @@ $is_admin_page_active = in_array($current_page, $admin_pages);
                                 <i class="fas fa-clipboard-list text-warning"></i>Audit Log
                                 <small class="text-muted d-block">System activity log</small>
                             </a></li>
-                            <li><a class="dropdown-item <?php echo isActive('user_management.php', $current_page); ?>" href="<?php echo $is_in_pages ? 'user_management.php' : 'pages/user_management.php'; ?>">
-                                <i class="fas fa-users text-success"></i>User Management
-                                <small class="text-muted d-block">Manage local accounts</small>
-                            </a></li>
                         </ul>
                     </li>
                     <?php endif; ?>
@@ -485,7 +481,7 @@ $is_admin_page_active = in_array($current_page, $admin_pages);
     
     <!-- Flash Messages -->
     <?php if ($flash): ?>
-    <div class="container mt-3">
+    <div style="max-width: 1200px; margin: 0 auto; padding: 0 1rem;" class="mt-3">
         <div class="alert alert-<?php echo $flash['type']; ?> alert-dismissible fade show" role="alert">
             <i class="fas fa-<?php echo $flash['type'] === 'success' ? 'check-circle' : ($flash['type'] === 'danger' ? 'exclamation-triangle' : 'info-circle'); ?>"></i>
             <?php echo htmlspecialchars($flash['message']); ?>
