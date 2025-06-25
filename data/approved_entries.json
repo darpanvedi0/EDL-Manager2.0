@@ -11,8 +11,10 @@
         "approved_by": "admin",
         "approved_at": "2025-06-22T18:10:32+02:00",
         "admin_comment": "",
-        "status": "active",
-        "request_id": "req_68582aedc5b672.43860503"
+        "status": "deleted",
+        "request_id": "req_68582aedc5b672.43860503",
+        "deleted_by": "admin",
+        "deleted_at": "2025-06-25T03:54:38+02:00"
     },
     {
         "id": "app_685a1352d62775.66950546",
@@ -26,8 +28,10 @@
         "approved_by": "admin",
         "approved_at": "2025-06-24T04:54:10+02:00",
         "admin_comment": "",
-        "status": "active",
-        "request_id": "req_685a134d193695.25843232"
+        "status": "deleted",
+        "request_id": "req_685a134d193695.25843232",
+        "deleted_by": "admin",
+        "deleted_at": "2025-06-25T03:55:09+02:00"
     },
     {
         "id": "app_685abf0acfedf8.74682726",
@@ -41,8 +45,10 @@
         "approved_by": "admin",
         "approved_at": "2025-06-24T17:06:50+02:00",
         "admin_comment": "Approved",
-        "status": "active",
+        "status": "deleted",
         "request_id": "req_685abf027ff475.49085437",
-        "servicenow_ticket": "INC1234567"
+        "servicenow_ticket": "INC1234567",
+        "deleted_by": "admin",
+        "deleted_at": "2025-06-25T03:55:16+02:00"
     }
 ]

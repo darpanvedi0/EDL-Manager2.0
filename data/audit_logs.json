@@ -149,5 +149,32 @@
         "details": "Approved ip request from admin",
         "request_id": "req_685abf027ff475.49085437",
         "admin_comment": "Approved"
+    },
+    {
+        "id": "audit_685b56de8490d4.22403397",
+        "timestamp": "2025-06-25T03:54:38+02:00",
+        "action": "delete_entry",
+        "entry": "1.1.1.1",
+        "user": "admin",
+        "details": "Deleted ip entry from active EDL",
+        "admin_comment": "Entry removed from blocklist"
+    },
+    {
+        "id": "audit_685b56fd46b792.79865634",
+        "timestamp": "2025-06-25T03:55:09+02:00",
+        "action": "delete_entry",
+        "entry": "1.1.1.5",
+        "user": "admin",
+        "details": "Deleted ip entry from active EDL",
+        "admin_comment": "Entry removed from blocklist"
+    },
+    {
+        "id": "audit_685b5704516f82.43009428",
+        "timestamp": "2025-06-25T03:55:16+02:00",
+        "action": "delete_entry",
+        "entry": "3.3.3.3",
+        "user": "admin",
+        "details": "Deleted ip entry from active EDL",
+        "admin_comment": "Entry removed from blocklist"
     }
 ]
