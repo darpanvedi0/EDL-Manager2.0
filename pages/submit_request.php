@@ -66,30 +66,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($den['entry'] === $entry && $den['type'] === $type) {
                     $denied_reason = htmlspecialchars($den['reason'] ?? 'No reason provided');
                     $denied_by = htmlspecialchars($den['denied_by'] ?? 'Admin');
-                    $denied_date = isset($den['denied_at']) ? date('M j, Y', strtotime($den['denied_at'])) : 'Unknown';
+                    $denied_date = isset($den['denied_at']) ? 
+                        date('M j, Y H:i', strtotime($den['denied_at'])) : 'Unknown';
                     
-                    $errors[] = "This entry was previously denied and cannot be submitted.<br>" .
-                               "<strong>Denial Reason:</strong> {$denied_reason}<br>" .
-                               "<strong>Denied by:</strong> {$denied_by} on {$denied_date}<br>" .
-                               "<em>Contact an administrator if you believe this is an error.</em>";
+                    $errors[] = "⚠️ This entry was previously <strong>DENIED</strong> on {$denied_date} by {$denied_by}.<br>" .
+                               "<strong>Reason:</strong> {$denied_reason}<br>" .
+                               "Please contact your administrator if you believe this should be reconsidered.";
                     break;
                 }
             }
             
-            // Only check other lists if not denied
+            // Check pending requests
             if (empty($errors)) {
-                // Check pending
-                foreach ($pending_requests as $req) {
-                    if ($req['entry'] === $entry && $req['status'] === 'pending') {
-                        $errors[] = 'Entry already has a pending request';
+                foreach ($pending_requests as $pending) {
+                    if ($pending['entry'] === $entry && $pending['type'] === $type) {
+                        $pending_by = htmlspecialchars($pending['submitted_by'] ?? 'Unknown');
+                        $pending_date = isset($pending['submitted_at']) ? 
+                            date('M j, Y H:i', strtotime($pending['submitted_at'])) : 'Unknown';
+                        
+                        if ($pending['submitted_by'] === $_SESSION['username']) {
+                            $errors[] = "You already have a pending request for this entry (submitted on {$pending_date}).";
+                        } else {
+                            $errors[] = "This entry is already pending approval (submitted by {$pending_by} on {$pending_date}).";
+                        }
                         break;
                     }
                 }
-                
-                // Check approved
-                foreach ($approved_entries as $ent) {
-                    if ($ent['entry'] === $entry && $ent['status'] === 'active') {
-                        $errors[] = 'Entry already exists in approved list';
+            }
+            
+            // Check approved entries
+            if (empty($errors)) {
+                foreach ($approved_entries as $approved) {
+                    if ($approved['entry'] === $entry && $approved['type'] === $type) {
+                        $errors[] = 'This entry is already approved and active on the EDL.';
                         break;
                     }
                 }
@@ -97,7 +106,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         
         if (empty($errors)) {
-            // Create new request
             $request = [
                 'id' => uniqid('req_', true),
                 'entry' => $entry,
@@ -111,7 +119,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'status' => 'pending'
             ];
             
-            // Save request
             $requests = read_json_file(DATA_DIR . '/pending_requests.json');
             $requests[] = $request;
             
@@ -164,679 +171,312 @@ $user_requests = array_filter($user_requests, function($r) {
 });
 $user_requests = array_slice(array_reverse($user_requests), 0, 5);
 
-$user_name = $_SESSION['name'] ?? $_SESSION['username'] ?? 'User';
-$user_username = $_SESSION['username'] ?? 'unknown';
-$user_email = $_SESSION['email'] ?? 'user@company.com';
-$user_role = $_SESSION['role'] ?? 'user';
-$user_permissions = $_SESSION['permissions'] ?? [];
-$flash = get_flash();
+// Include the centralized header
+require_once '../includes/header.php';
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?php echo $page_title; ?> - <?php echo APP_NAME; ?></title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <style>
-        body {
-            background-color: #f8f9fa;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        .navbar {
-            box-shadow: 0 2px 4px rgba(0,0,0,.1);
-        }
-        .card {
-            border: none;
-            border-radius: 15px;
-            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
-            transition: all 0.3s ease;
-        }
-        .card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
-        }
-        .btn {
-            border-radius: 10px;
-            font-weight: 500;
-            transition: all 0.3s ease;
-        }
-        .btn:hover {
-            transform: translateY(-1px);
-        }
-        .alert {
-            border: none;
-            border-radius: 10px;
-            border-left: 4px solid;
-        }
-        .alert-success {
-            border-left-color: #198754;
-            background-color: rgba(25, 135, 84, 0.1);
-        }
-        .dropdown-menu {
-            border: none;
-            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
-            border-radius: 10px;
-        }
-        .page-header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border-radius: 15px;
-            padding: 2rem;
-            margin-bottom: 2rem;
-        }
-        .required-field {
-            color: #dc3545;
-        }
-        .form-control:invalid {
-            border-color: #dc3545;
-        }
-        .form-control:valid {
-            border-color: #198754;
-        }
-        .servicenow-help {
-            background-color: #e3f2fd;
-            border-left: 4px solid #2196f3;
-            padding: 1rem;
-            border-radius: 0 8px 8px 0;
-            margin-top: 0.5rem;
-        }
-    </style>
-</head>
-<body>
-    <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
-        <div class="container">
-            <a class="navbar-brand fw-bold" href="../index.php">
-                <i class="fas fa-shield-alt me-2"></i>
-                <?php echo APP_NAME; ?>
-            </a>
-            
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="../index.php">
-                            <i class="fas fa-tachometer-alt me-1"></i> Dashboard
-                        </a>
-                    </li>
-                    <?php if (in_array('submit', $user_permissions)): ?>
-                    <li class="nav-item">
-                        <a class="nav-link active" href="submit_request.php">
-                            <i class="fas fa-plus me-1"></i> Submit Request
-                        </a>
-                    </li>
-                    <?php endif; ?>
-                    <?php if (in_array('approve', $user_permissions)): ?>
-                    <li class="nav-item">
-                        <a class="nav-link" href="approvals.php">
-                            <i class="fas fa-check-circle me-1"></i> Approvals
-                        </a>
-                    </li>
-                    <?php endif; ?>
-                    <li class="nav-item">
-                        <a class="nav-link" href="edl_viewer.php">
-                            <i class="fas fa-list me-1"></i> EDL Viewer
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="denied_entries.php">
-                            <i class="fas fa-ban me-1"></i> Denied Entries
-                        </a>
-                    </li>
+
+<div class="container mt-4">
+
+<?php if ($error_message): ?>
+<div class="alert alert-danger alert-dismissible fade show">
+    <i class="fas fa-exclamation-triangle"></i>
+    <?php echo $error_message; ?>
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+<?php endif; ?>
+
+<!-- Page Header -->
+<div class="page-header">
+    <h1 class="mb-2">
+        <i class="fas fa-plus me-2"></i>
+        Submit EDL Request
+    </h1>
+    <p class="mb-0 opacity-75">Submit a new entry for review and approval to the External Dynamic List</p>
+</div>
+
+<!-- Form -->
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-edit me-1"></i> Request Information
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" class="needs-validation" novalidate>
+                    <?php echo csrf_token_field(); ?>
                     
-                    <!-- Fixed Admin Dropdown -->
-                    <?php if (in_array('manage', $user_permissions)): ?>
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            <i class="fas fa-cog me-1"></i> Admin
-                        </a>
-                        <ul class="dropdown-menu" aria-labelledby="adminDropdown">
-                            <li>
-                                <h6 class="dropdown-header">
-                                    <i class="fas fa-server text-primary me-1"></i> Integration
-                                </h6>
-                            </li>
-                            <li><a class="dropdown-item" href="okta_config.php">
-                                <i class="fas fa-cloud text-primary me-2"></i> Okta SSO Configuration
-                                <small class="text-muted d-block">Configure Single Sign-On</small>
-                            </a></li>
-                            <li><a class="dropdown-item" href="teams_config.php">
-                                <i class="fab fa-microsoft text-info me-2"></i> Teams Notifications
-                                <small class="text-muted d-block">Configure Teams webhooks</small>
-                            </a></li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li>
-                                <h6 class="dropdown-header">
-                                    <i class="fas fa-database text-secondary me-1"></i> Data Management
-                                </h6>
-                            </li>
-                            <li><a class="dropdown-item" href="denied_entries.php">
-                                <i class="fas fa-ban text-danger me-2"></i> Denied Entries
-                                <small class="text-muted d-block">View rejected requests</small>
-                            </a></li>
-                            <li><a class="dropdown-item" href="audit_log.php">
-                                <i class="fas fa-clipboard-list text-warning me-2"></i> Audit Log
-                                <small class="text-muted d-block">System activity log</small>
-                            </a></li>
-                            <li><a class="dropdown-item" href="user_management.php">
-                                <i class="fas fa-users text-success me-2"></i> User Management
-                                <small class="text-muted d-block">Manage local accounts</small>
-                            </a></li>
-                        </ul>
-                    </li>
-                    <?php endif; ?>
-                </ul>
-                
-                <ul class="navbar-nav">
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
-                            <i class="fas fa-user me-1"></i>
-                            <?php echo htmlspecialchars($user_name); ?>
-                        </a>
-                        <ul class="dropdown-menu dropdown-menu-end">
-                            <li class="dropdown-item-text">
-                                <div class="fw-bold"><?php echo htmlspecialchars($user_username); ?></div>
-                                <small class="text-muted"><?php echo htmlspecialchars($user_email); ?></small>
-                            </li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li class="dropdown-item-text">
-                                <small class="text-muted">
-                                    Role: <span class="badge bg-primary"><?php echo ucfirst($user_role); ?></span>
-                                </small>
-                            </li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item" href="../logout.php">
-                                <i class="fas fa-sign-out-alt me-2"></i> Logout
-                            </a></li>
-                        </ul>
-                    </li>
-                </ul>
+                    <div class="row mb-3">
+                        <div class="col-md-8">
+                            <label for="entry" class="form-label fw-bold">Entry <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="entry" name="entry" 
+                                   value="<?php echo htmlspecialchars($_POST['entry'] ?? ''); ?>"
+                                   placeholder="e.g., 192.168.1.100, malicious.com, or https://bad-site.com"
+                                   required>
+                            <div class="form-text">Enter the IP address, domain, or URL to be blocked</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="type" class="form-label fw-bold">Type</label>
+                            <select class="form-select" id="type" name="type">
+                                <option value="auto" <?php echo ($_POST['type'] ?? '') === 'auto' ? 'selected' : ''; ?>>Auto-detect</option>
+                                <option value="ip" <?php echo ($_POST['type'] ?? '') === 'ip' ? 'selected' : ''; ?>>IP Address</option>
+                                <option value="domain" <?php echo ($_POST['type'] ?? '') === 'domain' ? 'selected' : ''; ?>>Domain</option>
+                                <option value="url" <?php echo ($_POST['type'] ?? '') === 'url' ? 'selected' : ''; ?>>URL</option>
+                            </select>
+                            <div id="type-indicator" class="mt-1"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="priority" class="form-label fw-bold">Priority</label>
+                            <select class="form-select" id="priority" name="priority">
+                                <option value="low" <?php echo ($_POST['priority'] ?? 'medium') === 'low' ? 'selected' : ''; ?>>
+                                    🔵 Low - Routine blocking
+                                </option>
+                                <option value="medium" <?php echo ($_POST['priority'] ?? 'medium') === 'medium' ? 'selected' : ''; ?>>
+                                    🟡 Medium - Standard security concern
+                                </option>
+                                <option value="high" <?php echo ($_POST['priority'] ?? 'medium') === 'high' ? 'selected' : ''; ?>>
+                                    🟠 High - Active threat
+                                </option>
+                                <option value="critical" <?php echo ($_POST['priority'] ?? 'medium') === 'critical' ? 'selected' : ''; ?>>
+                                    🔴 Critical - Immediate action required
+                                </option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="servicenow_ticket" class="form-label fw-bold">ServiceNow Ticket <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="servicenow_ticket" name="servicenow_ticket" 
+                                   value="<?php echo htmlspecialchars($_POST['servicenow_ticket'] ?? ''); ?>"
+                                   placeholder="e.g., INC1234567, REQ1234567"
+                                   required>
+                            <div class="form-text">Required for audit and tracking purposes</div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="justification" class="form-label fw-bold">Justification <span class="text-danger">*</span></label>
+                        <textarea class="form-control" id="justification" name="justification" rows="3" 
+                                  placeholder="Explain why this entry should be blocked..."
+                                  required><?php echo htmlspecialchars($_POST['justification'] ?? ''); ?></textarea>
+                        <div class="form-text">Provide a clear business justification for blocking this entry</div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label for="comment" class="form-label fw-bold">Additional Comments</label>
+                        <textarea class="form-control" id="comment" name="comment" rows="2" 
+                                  placeholder="Any additional context or technical details..."><?php echo htmlspecialchars($_POST['comment'] ?? ''); ?></textarea>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <a href="../index.php" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Back to Dashboard
+                            </a>
+                        </div>
+                        <div class="col-md-6 text-end">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-paper-plane"></i> Submit Request
+                            </button>
+                        </div>
+                    </div>
+                </form>
             </div>
         </div>
-    </nav>
-    
-    <?php if ($flash): ?>
-    <div class="container mt-3">
-        <div class="alert alert-<?php echo $flash['type']; ?> alert-dismissible fade show">
-            <i class="fas fa-check-circle"></i>
-            <?php echo htmlspecialchars($flash['message']); ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
     </div>
-    <?php endif; ?>
     
-    <?php if ($error_message): ?>
-    <div class="container mt-3">
-        <div class="alert alert-danger">
-            <i class="fas fa-exclamation-triangle"></i>
-            <?php echo $error_message; ?>
-        </div>
-    </div>
-    <?php endif; ?>
-    
-    <div class="container mt-4">
-        <!-- Page Header -->
-        <div class="page-header">
-            <h1 class="mb-2">
-                <i class="fas fa-plus me-2"></i>
-                Submit EDL Request
-            </h1>
-            <p class="mb-0 opacity-75">Request to add IP addresses, domains, or URLs to the blocklist</p>
+    <div class="col-lg-4">
+        <!-- Guidelines -->
+        <div class="card">
+            <div class="card-header bg-light">
+                <h6 class="mb-0">
+                    <i class="fas fa-info-circle text-info"></i> Entry Format Examples
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <h6><i class="fas fa-network-wired text-primary"></i> IP Address:</h6>
+                    <code class="small d-block">192.168.1.100</code>
+                    <code class="small d-block">10.0.0.0/24</code>
+                    <code class="small d-block">2001:db8::1</code>
+                </div>
+                
+                <div class="mb-3">
+                    <h6><i class="fas fa-globe text-success"></i> Domain:</h6>
+                    <code class="small d-block">malicious.com</code>
+                    <code class="small d-block">evil.example.org</code>
+                </div>
+                
+                <div class="mb-3">
+                    <h6><i class="fas fa-link text-info"></i> URL:</h6>
+                    <code class="small d-block">https://bad-site.com/malware</code>
+                    <code class="small d-block">http://phishing.example.com</code>
+                </div>
+            </div>
         </div>
         
-        <div class="row">
-            <div class="col-lg-8">
-                <div class="card">
-                    <div class="card-header bg-light">
-                        <h5 class="mb-0">
-                            <i class="fas fa-edit me-2"></i> New Request Details
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <form method="POST" class="needs-validation" novalidate>
-                            <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
-                            
-                            <div class="row">
-                                <div class="col-md-8">
-                                    <div class="mb-3">
-                                        <label for="entry" class="form-label">
-                                            Entry to Block <span class="required-field">*</span>
-                                        </label>
-                                        <input type="text" class="form-control" id="entry" name="entry" 
-                                               value="<?php echo htmlspecialchars($_POST['entry'] ?? ''); ?>"
-                                               placeholder="192.168.1.1, malicious.com, or https://bad-site.com"
-                                               required>
-                                        <div class="form-text">
-                                            Enter the IP address, domain, or URL you want to block
-                                        </div>
-                                        <div id="type-indicator" class="small mt-1"></div>
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="mb-3">
-                                        <label for="type" class="form-label">
-                                            Type <span class="required-field">*</span>
-                                        </label>
-                                        <select class="form-select" id="type" name="type" required>
-                                            <option value="auto" <?php echo ($_POST['type'] ?? 'auto') === 'auto' ? 'selected' : ''; ?>>
-                                                Auto-detect
-                                            </option>
-                                            <option value="ip" <?php echo ($_POST['type'] ?? '') === 'ip' ? 'selected' : ''; ?>>
-                                                IP Address
-                                            </option>
-                                            <option value="domain" <?php echo ($_POST['type'] ?? '') === 'domain' ? 'selected' : ''; ?>>
-                                                Domain
-                                            </option>
-                                            <option value="url" <?php echo ($_POST['type'] ?? '') === 'url' ? 'selected' : ''; ?>>
-                                                URL
-                                            </option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label for="priority" class="form-label">Priority</label>
-                                        <select class="form-select" id="priority" name="priority">
-                                            <option value="low" <?php echo ($_POST['priority'] ?? 'medium') === 'low' ? 'selected' : ''; ?>>
-                                                Low - Routine cleanup
-                                            </option>
-                                            <option value="medium" <?php echo ($_POST['priority'] ?? 'medium') === 'medium' ? 'selected' : ''; ?>>
-                                                Medium - Standard threat
-                                            </option>
-                                            <option value="high" <?php echo ($_POST['priority'] ?? 'medium') === 'high' ? 'selected' : ''; ?>>
-                                                High - Active threat
-                                            </option>
-                                            <option value="critical" <?php echo ($_POST['priority'] ?? 'medium') === 'critical' ? 'selected' : ''; ?>>
-                                                Critical - Immediate action
-                                            </option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label for="servicenow_ticket" class="form-label">
-                                            ServiceNow Ticket <span class="required-field">*</span>
-                                        </label>
-                                        <input type="text" class="form-control" id="servicenow_ticket" name="servicenow_ticket" 
-                                               value="<?php echo htmlspecialchars($_POST['servicenow_ticket'] ?? ''); ?>"
-                                               placeholder="INC1234567, REQ1234567, etc."
-                                               pattern="^(INC|REQ|CHG|RITM|TASK|SCTASK)[0-9]{7}$"
-                                               required>
-                                        <div class="servicenow-help">
-                                            <small>
-                                                <i class="fas fa-info-circle text-primary me-1"></i>
-                                                <strong>Required format:</strong> INC1234567, REQ1234567, CHG1234567, RITM1234567, TASK1234567, or SCTASK1234567
-                                            </small>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div class="mb-3">
-                                <label for="justification" class="form-label">
-                                    Business Justification <span class="required-field">*</span>
-                                </label>
-                                <textarea class="form-control" id="justification" name="justification" 
-                                          rows="4" required
-                                          placeholder="Explain why this entry should be blocked. Include threat intelligence, incident details, or business requirements."><?php echo htmlspecialchars($_POST['justification'] ?? ''); ?></textarea>
-                                <div class="form-text">
-                                    Provide clear justification for blocking this entry
-                                </div>
-                            </div>
-                            
-                            <div class="mb-4">
-                                <label for="comment" class="form-label">Additional Comments</label>
-                                <textarea class="form-control" id="comment" name="comment" 
-                                          rows="3"
-                                          placeholder="Any additional context or notes for the approver (optional)"><?php echo htmlspecialchars($_POST['comment'] ?? ''); ?></textarea>
-                            </div>
-                            
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <a href="../index.php" class="btn btn-secondary">
-                                        <i class="fas fa-arrow-left"></i> Back to Dashboard
-                                    </a>
-                                </div>
-                                <div class="col-md-6 text-end">
-                                    <button type="submit" class="btn btn-primary">
-                                        <i class="fas fa-paper-plane"></i> Submit Request
-                                    </button>
-                                </div>
-                            </div>
-                        </form>
-                    </div>
-                </div>
+        <!-- ServiceNow Ticket Guidelines -->
+        <div class="card mt-3">
+            <div class="card-header bg-light">
+                <h6 class="mb-0">
+                    <i class="fas fa-ticket-alt text-warning"></i> ServiceNow Ticket Guidelines
+                </h6>
             </div>
-            
-            <div class="col-lg-4">
-                <!-- Guidelines -->
-                <div class="card">
-                    <div class="card-header bg-light">
-                        <h6 class="mb-0">
-                            <i class="fas fa-info-circle text-info"></i> Entry Format Examples
-                        </h6>
-                    </div>
-                    <div class="card-body">
-                        <div class="mb-3">
-                            <h6><i class="fas fa-network-wired text-primary"></i> IP Address:</h6>
-                            <code class="small d-block">192.168.1.100</code>
-                            <code class="small d-block">10.0.0.0/24</code>
-                            <code class="small d-block">2001:db8::1</code>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <h6><i class="fas fa-globe text-success"></i> Domain:</h6>
-                            <code class="small d-block">malicious.com</code>
-                            <code class="small d-block">evil.example.org</code>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <h6><i class="fas fa-link text-info"></i> URL:</h6>
-                            <code class="small d-block">https://bad-site.com/malware</code>
-                            <code class="small d-block">http://phishing.example.com</code>
-                        </div>
-                    </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <h6><i class="fas fa-exclamation-triangle text-danger"></i> Incident:</h6>
+                    <code class="small d-block">INC1234567</code>
+                    <small class="text-muted">For security incidents</small>
                 </div>
                 
-                <!-- ServiceNow Ticket Guidelines -->
-                <div class="card mt-3">
-                    <div class="card-header bg-light">
-                        <h6 class="mb-0">
-                            <i class="fas fa-ticket-alt text-warning"></i> ServiceNow Ticket Guidelines
-                        </h6>
-                    </div>
-                    <div class="card-body">
-                        <div class="mb-3">
-                            <h6><i class="fas fa-exclamation-triangle text-danger"></i> Incident:</h6>
-                            <code class="small d-block">INC1234567</code>
-                            <small class="text-muted">For security incidents</small>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <h6><i class="fas fa-clipboard-list text-primary"></i> Request:</h6>
-                            <code class="small d-block">REQ1234567</code>
-                            <small class="text-muted">For service requests</small>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <h6><i class="fas fa-wrench text-info"></i> Change:</h6>
-                            <code class="small d-block">CHG1234567</code>
-                            <small class="text-muted">For change requests</small>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <h6><i class="fas fa-tasks text-secondary"></i> Other:</h6>
-                            <code class="small d-block">RITM1234567</code>
-                            <code class="small d-block">TASK1234567</code>
-                            <code class="small d-block">SCTASK1234567</code>
-                        </div>
-                        
-                        <div class="alert alert-warning">
-                            <small>
-                                <i class="fas fa-info-circle"></i>
-                                <strong>Note:</strong> ServiceNow ticket is mandatory and will be included in all logs and notifications.
-                            </small>
-                        </div>
-                    </div>
+                <div class="mb-3">
+                    <h6><i class="fas fa-clipboard-list text-primary"></i> Request:</h6>
+                    <code class="small d-block">REQ1234567</code>
+                    <small class="text-muted">For service requests</small>
                 </div>
                 
-                <!-- Recent Requests -->
-                <div class="card mt-3">
-                    <div class="card-header bg-light">
-                        <h6 class="mb-0">
-                            <i class="fas fa-history text-secondary"></i> Your Recent Requests
-                        </h6>
-                    </div>
-                    <div class="card-body">
-                        <?php if (empty($user_requests)): ?>
-                            <div class="text-center text-muted">
-                                <i class="fas fa-inbox fa-2x mb-2"></i><br>
-                                <small>No recent requests</small>
-                            </div>
-                        <?php else: ?>
-                            <?php foreach ($user_requests as $request): ?>
-                                <div class="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
-                                    <div>
-                                        <code class="small"><?php echo htmlspecialchars($request['entry']); ?></code><br>
-                                        <small class="text-muted">
-                                            <?php 
-                                            $time = strtotime($request['submitted_at']);
-                                            echo $time ? date('M j, H:i', $time) : 'Unknown';
-                                            ?>
-                                            <?php if (!empty($request['servicenow_ticket'])): ?>
-                                                <br><span class="badge bg-info"><?php echo htmlspecialchars($request['servicenow_ticket']); ?></span>
-                                            <?php endif; ?>
-                                        </small>
-                                    </div>
-                                    <span class="badge <?php 
-                                        echo $request['status'] === 'pending' ? 'bg-warning text-dark' : 
-                                             ($request['status'] === 'approved' ? 'bg-success' : 'bg-danger'); 
-                                    ?>">
-                                        <?php echo ucfirst($request['status']); ?>
-                                    </span>
-                                </div>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
-                    </div>
+                <div class="mb-3">
+                    <h6><i class="fas fa-wrench text-info"></i> Change:</h6>
+                    <code class="small d-block">CHG1234567</code>
+                    <small class="text-muted">For change requests</small>
                 </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Footer -->
-    <footer class="bg-light py-3 mt-5">
-        <div class="container">
-            <div class="row">
-                <div class="col-md-6">
-                    <p class="mb-0 text-muted">
-                        &copy; <?php echo date('Y'); ?> <?php echo APP_NAME; ?> v<?php echo APP_VERSION; ?>
-                    </p>
+                
+                <div class="mb-3">
+                    <h6><i class="fas fa-tasks text-secondary"></i> Other:</h6>
+                    <code class="small d-block">RITM1234567</code>
+                    <code class="small d-block">TASK1234567</code>
+                    <code class="small d-block">SCTASK1234567</code>
                 </div>
-                <div class="col-md-6 text-end">
-                    <small class="text-muted">
-                        Last updated: <?php echo date('Y-m-d H:i:s'); ?>
+                
+                <div class="alert alert-warning">
+                    <small>
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Note:</strong> ServiceNow ticket is mandatory and will be included in all logs and notifications.
                     </small>
                 </div>
             </div>
         </div>
-    </footer>
+        
+        <!-- Recent Requests -->
+        <div class="card mt-3">
+            <div class="card-header bg-light">
+                <h6 class="mb-0">
+                    <i class="fas fa-history text-secondary"></i> Your Recent Requests
+                </h6>
+            </div>
+            <div class="card-body">
+                <?php if (empty($user_requests)): ?>
+                    <div class="text-center text-muted">
+                        <i class="fas fa-inbox fa-2x mb-2"></i><br>
+                        <small>No recent requests</small>
+                    </div>
+                <?php else: ?>
+                    <?php foreach ($user_requests as $request): ?>
+                        <div class="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
+                            <div>
+                                <code class="small"><?php echo htmlspecialchars($request['entry']); ?></code><br>
+                                <small class="text-muted">
+                                    <?php 
+                                    $time = strtotime($request['submitted_at']);
+                                    echo $time ? date('M j, H:i', $time) : 'Unknown';
+                                    ?>
+                                    <?php if (!empty($request['servicenow_ticket'])): ?>
+                                        <br><span class="badge bg-info"><?php echo htmlspecialchars($request['servicenow_ticket']); ?></span>
+                                    <?php endif; ?>
+                                </small>
+                            </div>
+                            <span class="badge <?php 
+                                echo $request['status'] === 'pending' ? 'bg-warning text-dark' : 
+                                     ($request['status'] === 'approved' ? 'bg-success' : 'bg-danger'); 
+                            ?>">
+                                <?php echo ucfirst($request['status']); ?>
+                            </span>
+                        </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
+
+</div>
+
+<script>
+// Auto-detect entry type and check against denied entries
+document.getElementById('entry').addEventListener('input', function() {
+    const entry = this.value.trim();
+    const typeSelect = document.getElementById('type');
+    const indicator = document.getElementById('type-indicator');
     
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        // Auto-detect entry type and check against denied entries
-        document.getElementById('entry').addEventListener('input', function() {
-            const entry = this.value.trim();
-            const typeSelect = document.getElementById('type');
-            const indicator = document.getElementById('type-indicator');
-            
-            if (entry && typeSelect.value === 'auto') {
-                let detectedType = 'unknown';
-                let icon = '';
-                
-                if (/^https?:\/\//.test(entry)) {
-                    detectedType = 'url';
-                    icon = 'fas fa-link';
-                    typeSelect.value = 'url';
-                } else if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/.test(entry)) {
-                    detectedType = 'ip';
-                    icon = 'fas fa-network-wired';
-                    typeSelect.value = 'ip';
-                } else if (/^[a-zA-Z0-9][a-zA-Z0-9\.-]*\.[a-zA-Z]{2,}$/.test(entry)) {
-                    detectedType = 'domain';
-                    icon = 'fas fa-globe';
-                    typeSelect.value = 'domain';
-                }
-                
-                if (detectedType !== 'unknown') {
-                    indicator.innerHTML = `<i class="${icon} text-success"></i> Auto-detected as ${detectedType.toUpperCase()}`;
-                    indicator.className = 'small text-success mt-1';
-                } else {
-                    indicator.innerHTML = '<i class="fas fa-question-circle text-warning"></i> Could not auto-detect type';
-                    indicator.className = 'small text-warning mt-1';
-                }
-            } else {
-                indicator.innerHTML = '';
-            }
-            
-            // Check against denied entries in real-time
-            if (entry.length > 3) {
-                checkDeniedEntries(entry, typeSelect.value);
-            } else {
-                clearDeniedWarning();
-            }
-        });
+    if (entry && typeSelect.value === 'auto') {
+        let detectedType = 'unknown';
+        let icon = '';
         
-        // ServiceNow ticket validation
-        document.getElementById('servicenow_ticket').addEventListener('input', function() {
-            const ticket = this.value.trim().toUpperCase();
-            const pattern = /^(INC|REQ|CHG|RITM|TASK|SCTASK)[0-9]{7}$/;
-            
-            if (ticket && !pattern.test(ticket)) {
-                this.setCustomValidity('Invalid ServiceNow ticket format. Use: INC1234567, REQ1234567, etc.');
-                this.classList.add('is-invalid');
-                this.classList.remove('is-valid');
-            } else if (ticket) {
-                this.setCustomValidity('');
-                this.classList.remove('is-invalid');
-                this.classList.add('is-valid');
-                // Auto-format to uppercase
-                this.value = ticket;
-            } else {
-                this.setCustomValidity('ServiceNow ticket is required');
-                this.classList.remove('is-valid', 'is-invalid');
-            }
-        });
-        
-        // Function to check denied entries via AJAX
-        function checkDeniedEntries(entry, type) {
-            fetch('../api/check_denied.php', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    entry: entry,
-                    type: type
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.denied) {
-                    showDeniedWarning(data.reason, data.denied_by, data.denied_date);
-                } else {
-                    clearDeniedWarning();
-                }
-            })
-            .catch(error => {
-                console.warn('Error checking denied entries:', error);
-            });
+        if (/^https?:\/\//.test(entry)) {
+            detectedType = 'url';
+            icon = 'fas fa-link';
+            typeSelect.value = 'url';
+        } else if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/.test(entry)) {
+            detectedType = 'ip';
+            icon = 'fas fa-network-wired';
+            typeSelect.value = 'ip';
+        } else if (/^[a-zA-Z0-9][a-zA-Z0-9\.-]*\.[a-zA-Z]{2,}$/.test(entry)) {
+            detectedType = 'domain';
+            icon = 'fas fa-globe';
+            typeSelect.value = 'domain';
         }
         
-        // Show denied warning
-        function showDeniedWarning(reason, deniedBy, deniedDate) {
-            const existingWarning = document.getElementById('denied-warning');
-            if (existingWarning) {
-                existingWarning.remove();
-            }
-            
-            const entryField = document.getElementById('entry');
-            const warning = document.createElement('div');
-            warning.id = 'denied-warning';
-            warning.className = 'alert alert-danger mt-2';
-            warning.innerHTML = `
-                <i class="fas fa-ban"></i> <strong>Entry Previously Denied</strong><br>
-                <small><strong>Reason:</strong> ${reason}<br>
-                <strong>Denied by:</strong> ${deniedBy} on ${deniedDate}<br>
-                <em>This entry cannot be submitted. Contact an administrator if needed.</em></small>
-            `;
-            
-            entryField.parentNode.appendChild(warning);
-            entryField.classList.add('is-invalid');
+        if (detectedType !== 'unknown') {
+            indicator.innerHTML = `<small class="text-success"><i class="${icon}"></i> Detected: ${detectedType}</small>`;
+        } else {
+            indicator.innerHTML = '<small class="text-muted">Could not auto-detect type</small>';
         }
-        
-        // Clear denied warning
-        function clearDeniedWarning() {
-            const warning = document.getElementById('denied-warning');
-            if (warning) {
-                warning.remove();
-            }
-            const entryField = document.getElementById('entry');
-            entryField.classList.remove('is-invalid');
-        }
-        
-        // Form validation
-        (function() {
-            const forms = document.querySelectorAll('.needs-validation');
-            Array.prototype.slice.call(forms).forEach(function(form) {
-                form.addEventListener('submit', function(event) {
-                    // Check if there's a denied warning
-                    const deniedWarning = document.getElementById('denied-warning');
-                    if (deniedWarning) {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        showNotification('Cannot submit a denied entry', 'danger');
-                        return false;
-                    }
-                    
-                    // Validate ServiceNow ticket
-                    const ticket = document.getElementById('servicenow_ticket').value.trim();
-                    const pattern = /^(INC|REQ|CHG|RITM|TASK|SCTASK)[0-9]{7}$/;
-                    if (!pattern.test(ticket)) {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        showNotification('Invalid ServiceNow ticket format', 'danger');
-                        document.getElementById('servicenow_ticket').focus();
-                        return false;
-                    }
-                    
-                    if (!form.checkValidity()) {
-                        event.preventDefault();
-                        event.stopPropagation();
-                    }
-                    form.classList.add('was-validated');
-                });
-            });
-        })();
-        
-        // Show notification function
-        function showNotification(message, type = 'info') {
-            const alertClass = 'alert-' + type;
-            const notification = document.createElement('div');
-            notification.className = `alert ${alertClass} alert-dismissible position-fixed`;
-            notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
-            
-            notification.innerHTML = `
-                ${message}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            `;
-            
-            document.body.appendChild(notification);
-            
-            setTimeout(() => {
-                if (notification.parentNode) {
-                    notification.remove();
+    } else {
+        indicator.innerHTML = '';
+    }
+});
+
+// Validate ServiceNow ticket format
+document.getElementById('servicenow_ticket').addEventListener('input', function() {
+    const ticket = this.value.trim().toUpperCase();
+    this.value = ticket;
+    
+    const patterns = [
+        /^INC\d{7}$/,
+        /^REQ\d{7}$/,
+        /^CHG\d{7}$/,
+        /^RITM\d{7}$/,
+        /^TASK\d{7}$/,
+        /^SCTASK\d{7}$/
+    ];
+    
+    const isValid = patterns.some(pattern => pattern.test(ticket));
+    
+    if (ticket && !isValid) {
+        this.classList.add('is-invalid');
+    } else {
+        this.classList.remove('is-invalid');
+    }
+});
+
+// Bootstrap form validation
+(function() {
+    'use strict';
+    window.addEventListener('load', function() {
+        var forms = document.getElementsByClassName('needs-validation');
+        var validation = Array.prototype.filter.call(forms, function(form) {
+            form.addEventListener('submit', function(event) {
+                if (form.checkValidity() === false) {
+                    event.preventDefault();
+                    event.stopPropagation();
                 }
-            }, 3000);
-        }
-        
-        // Initialize tooltips
-        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-            return new bootstrap.Tooltip(tooltipTriggerEl)
+                form.classList.add('was-validated');
+            }, false);
         });
-        
-        // Auto-format ServiceNow ticket to uppercase on blur
-        document.getElementById('servicenow_ticket').addEventListener('blur', function() {
-            this.value = this.value.toUpperCase();
-        });
-    </script>
-</body>
-</html>
+    }, false);
+})();
+</script>
+
+<?php require_once '../includes/footer.php'; ?>     

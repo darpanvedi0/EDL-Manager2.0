@@ -1,4 +1,12 @@
-<!-- Footer -->
+<?php
+// includes/footer.php - Complete Footer Template
+
+// Close the main container div opened in header.php
+?>
+    </div>
+    <!-- End main container -->
+    
+    <!-- Footer -->
     <footer class="bg-light py-3 mt-5">
         <div class="container">
             <div class="row">
@@ -18,6 +26,9 @@
     
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Custom JS -->
+    <script src="<?php echo isset($base_path) ? $base_path : ''; ?>assets/js/main.js"></script>
     
     <!-- Common JavaScript Functions -->
     <script>
@@ -56,8 +67,8 @@
         function showNotification(message, type = 'info') {
             const alertClass = 'alert-' + type;
             const notification = document.createElement('div');
-            notification.className = `alert ${alertClass} alert-dismissible position-fixed`;
-            notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+            notification.className = `alert ${alertClass} alert-dismissible fade show position-fixed`;
+            notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px; max-width: 500px;';
             
             const icons = {
                 'success': 'fas fa-check-circle',
@@ -70,67 +81,44 @@
             notification.innerHTML = `
                 <i class="${icon} me-2"></i>
                 ${message}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
             `;
             
             document.body.appendChild(notification);
             
+            // Auto-dismiss after 5 seconds
             setTimeout(() => {
-                if (notification.parentNode) {
-                    notification.remove();
+                if (notification && notification.parentNode) {
+                    notification.classList.remove('show');
+                    setTimeout(() => {
+                        if (notification.parentNode) {
+                            notification.parentNode.removeChild(notification);
+                        }
+                    }, 150);
                 }
-            }, 3000);
+            }, 5000);
         }
         
-        // Initialize tooltips
-        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-            return new bootstrap.Tooltip(tooltipTriggerEl)
-        });
-        
-        // Add some interactivity
+        // Initialize tooltips (if any)
         document.addEventListener('DOMContentLoaded', function() {
-            // Animate stats cards on load
-            const statCards = document.querySelectorAll('.stat-card');
-            statCards.forEach((card, index) => {
-                card.style.opacity = '0';
-                card.style.transform = 'translateY(20px)';
-                
-                setTimeout(() => {
-                    card.style.transition = 'all 0.5s ease';
-                    card.style.opacity = '1';
-                    card.style.transform = 'translateY(0)';
-                }, index * 100);
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
             });
-            
-            // Auto-refresh pending count every 30 seconds
-            setInterval(() => {
-                fetch('<?php echo $base_path ?? ''; ?>api/get_stats.php')
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.pending !== undefined) {
-                            const pendingElements = document.querySelectorAll('.pending-count');
-                            pendingElements.forEach(el => {
-                                el.textContent = data.pending;
-                                el.style.display = data.pending > 0 ? 'inline' : 'none';
-                            });
-                        }
-                    })
-                    .catch(error => console.warn('Failed to update stats:', error));
-            }, 30000);
         });
         
-        // Page-specific JavaScript can be added here if needed
-        <?php if (isset($page_js)): ?>
-            <?php echo $page_js; ?>
-        <?php endif; ?>
+        // Initialize popovers (if any)
+        document.addEventListener('DOMContentLoaded', function() {
+            var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
+            var popoverList = popoverTriggerList.map(function (popoverTriggerEl) {
+                return new bootstrap.Popover(popoverTriggerEl);
+            });
+        });
     </script>
     
-    <!-- Page-specific JavaScript files can be included here -->
-    <?php if (isset($additional_js_files) && is_array($additional_js_files)): ?>
-        <?php foreach ($additional_js_files as $js_file): ?>
-            <script src="<?php echo $js_file; ?>"></script>
-        <?php endforeach; ?>
+    <!-- Additional page-specific scripts can be added here -->
+    <?php if (isset($additional_scripts)): ?>
+        <?php echo $additional_scripts; ?>
     <?php endif; ?>
     
 </body>
