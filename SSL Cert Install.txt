@@ -1,0 +1,83 @@
+Internal SSL Certificate Options:
+1. Internal Certificate Authority (Recommended)
+bash# Create your own CA for internal use
+openssl genrsa -out internal-ca.key 4096
+openssl req -new -x509 -days 3650 -key internal-ca.key -out internal-ca.crt
+2. Self-Signed Certificates (Simple)
+
+Perfect for development and small internal deployments
+The CSR generation feature in the page supports this
+Just need to add the certificate to trusted roots on client machines
+
+3. Internal DNS + Let's Encrypt
+
+If your internal domain is publicly resolvable
+Use DNS-01 challenge for internal-only servers
+
+4. Wildcard Certificates
+
+Get a wildcard cert for *.internal.company.com
+Use for multiple internal services
+
+Internal-Specific Configuration Tips:
+For Internal Networks, you might want to modify:
+
+Relaxed HSTS Settings:
+php'hsts_max_age' => 86400, // 1 day instead of 1 year for internal
+
+Internal Domain Names:
+php'domain_name' => 'edl-manager.internal.company.com'
+// or
+'domain_name' => 'edl-manager.corp'
+
+Certificate Paths for Internal CA:
+php'certificate_path' => '/etc/ssl/internal/edl-manager.crt',
+'certificate_chain_path' => '/etc/ssl/internal/internal-ca.crt'
+
+
+Internal Deployment Example:
+Step 1: Generate Internal Certificate
+bash# Generate private key
+openssl genrsa -out edl-manager.key 2048
+
+# Generate certificate (self-signed for internal)
+openssl req -new -x509 -key edl-manager.key -out edl-manager.crt -days 365 \
+  -subj "/C=US/ST=State/L=City/O=Company/CN=edl-manager.internal.company.com"
+Step 2: Configure Internal DNS
+bash# Add to internal DNS
+edl-manager.internal.company.com    A    192.168.1.100
+Step 3: Use the SSL Config Page
+
+Set domain: edl-manager.internal.company.com
+Point to your internal certificates
+Enable auto-redirect for the admin interface
+Keep EDL files on HTTP for firewall consumption
+
+Benefits for Internal Use:
+
+Firewall Integration: Internal firewalls can still pull EDL files via HTTP
+Admin Security: Admin interface protected with HTTPS
+SSO Ready: Works with your internal Okta instance
+Future Proof: Ready if you later expose externally
+Compliance: Meets internal security compliance requirements
+
+Example Internal Apache Config:
+apache# Internal HTTPS
+<VirtualHost 192.168.1.100:443>
+    ServerName edl-manager.internal.company.com
+    SSLEngine on
+    SSLCertificateFile /etc/ssl/internal/edl-manager.crt
+    SSLCertificateKeyFile /etc/ssl/internal/edl-manager.key
+    # Rest of SSL config...
+</VirtualHost>
+
+# Internal HTTP for EDL files only
+<VirtualHost 192.168.1.100:80>
+    ServerName edl-manager.internal.company.com
+    # Only allow EDL file access
+    <Directory "/var/www/html/edl-manager/edl-files">
+        Require ip 192.168.0.0/16
+        Require ip 10.0.0.0/8
+    </Directory>
+</VirtualHost>
+The SSL configuration page handles all of this automatically - just adjust the domain name and certificate paths for your internal environment. The dual HTTP/HTTPS approach works perfectly for internal networks where you want secure admin access but need firewall-friendly EDL file distribution.
