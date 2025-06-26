@@ -30,7 +30,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_admin) {
                     if ($entry['id'] === $entry_id && $entry['status'] === 'active') {
                         $deleted_entry = $entry;
                         
-                        // Mark as deleted instead of removing completely
+                        // Mark as deleted instead of removing completely (for audit purposes)
                         $approved_entries[$key]['status'] = 'deleted';
                         $approved_entries[$key]['deleted_by'] = $_SESSION['username'];
                         $approved_entries[$key]['deleted_at'] = date('c');
@@ -41,31 +41,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_admin) {
                 }
                 
                 if ($entry_deleted && $deleted_entry) {
-                    // Save updated approved entries
-                    write_json_file(DATA_DIR . '/approved_entries.json', $approved_entries);
-                    
-                    // Regenerate EDL files
-                    regenerate_edl_files();
-                    
-                    // Add audit log
-                    $audit_logs = read_json_file(DATA_DIR . '/audit_logs.json');
-                    $audit_logs[] = [
-                        'id' => uniqid('audit_', true),
-                        'timestamp' => date('c'),
-                        'action' => 'delete_entry',
-                        'entry' => $deleted_entry['entry'],
-                        'user' => $_SESSION['username'],
-                        'details' => "Deleted {$deleted_entry['type']} entry from active EDL",
-                        'admin_comment' => "Entry removed from blocklist"
-                    ];
-                    write_json_file(DATA_DIR . '/audit_logs.json', $audit_logs);
-                    
-                    show_flash('Entry deleted successfully and removed from EDL files.', 'success');
-                    header('Location: edl_viewer.php');
-                    exit;
+                    // Save updated approved entries JSON
+                    if (write_json_file(DATA_DIR . '/approved_entries.json', $approved_entries)) {
+                        // Regenerate EDL files (this will exclude deleted entries)
+                        $regenerate_result = regenerate_edl_files();
+                        
+                        // Add audit log
+                        $audit_logs = read_json_file(DATA_DIR . '/audit_logs.json');
+                        $audit_logs[] = [
+                            'id' => uniqid('audit_', true),
+                            'timestamp' => date('c'),
+                            'action' => 'delete_entry',
+                            'entry' => $deleted_entry['entry'],
+                            'user' => $_SESSION['username'],
+                            'details' => "Deleted {$deleted_entry['type']} entry from active EDL",
+                            'admin_comment' => "Entry removed from blocklist and marked as deleted"
+                        ];
+                        write_json_file(DATA_DIR . '/audit_logs.json', $audit_logs);
+                        
+                        show_flash("Entry deleted successfully and removed from EDL files. Updated files: IP({$regenerate_result['ip_count']}), Domain({$regenerate_result['domain_count']}), URL({$regenerate_result['url_count']})", 'success');
+                        header('Location: edl_viewer.php');
+                        exit;
+                    } else {
+                        $error_message = 'Failed to update JSON file. Please check file permissions.';
+                    }
                 } else {
                     $error_message = 'Entry not found or already deleted.';
                 }
+            } else {
+                $error_message = 'Invalid entry ID provided.';
             }
         }
     }
@@ -121,14 +125,16 @@ foreach ($active_entries as $entry) {
 // Helper function to regenerate EDL files
 function regenerate_edl_files() {
     $approved_entries = read_json_file(DATA_DIR . '/approved_entries.json');
-    $active_entries = array_filter($approved_entries, fn($e) => $e['status'] === 'active');
+    $active_entries = array_filter($approved_entries, function($e) {
+        return isset($e['status']) && $e['status'] === 'active';
+    });
     
     $ip_list = [];
     $domain_list = [];
     $url_list = [];
     
     foreach ($active_entries as $entry) {
-        switch ($entry['type']) {
+        switch ($entry['type'] ?? '') {
             case 'ip':
                 $ip_list[] = $entry['entry'];
                 break;
@@ -141,19 +147,25 @@ function regenerate_edl_files() {
         }
     }
     
-    // Write EDL files
+    // Ensure EDL files directory exists
     if (!is_dir(EDL_FILES_DIR)) {
         mkdir(EDL_FILES_DIR, 0755, true);
     }
     
-    file_put_contents(EDL_FILES_DIR . '/ip_blocklist.txt', implode("\n", $ip_list));
-    file_put_contents(EDL_FILES_DIR . '/domain_blocklist.txt', implode("\n", $domain_list));
-    file_put_contents(EDL_FILES_DIR . '/url_blocklist.txt', implode("\n", $url_list));
+    // Write EDL files with error checking
+    $ip_result = file_put_contents(EDL_FILES_DIR . '/ip_blocklist.txt', implode("\n", $ip_list));
+    $domain_result = file_put_contents(EDL_FILES_DIR . '/domain_blocklist.txt', implode("\n", $domain_list));
+    $url_result = file_put_contents(EDL_FILES_DIR . '/url_blocklist.txt', implode("\n", $url_list));
+    
+    if ($ip_result === false || $domain_result === false || $url_result === false) {
+        error_log('Failed to write EDL files in edl_viewer.php');
+    }
     
     return [
         'ip_count' => count($ip_list),
         'domain_count' => count($domain_list),
-        'url_count' => count($url_list)
+        'url_count' => count($url_list),
+        'total_active' => count($active_entries)
     ];
 }
 
@@ -625,10 +637,11 @@ require_once '../includes/header.php';
                                 <strong>Warning:</strong> This action will:
                             </p>
                             <ul class="mb-0 mt-2">
-                                <li>Mark the entry as <strong>deleted</strong></li>
+                                <li>Mark the entry as <strong>deleted</strong> in the JSON database</li>
                                 <li>Remove it from all EDL text files</li>
                                 <li>Remove it from firewall blocklists</li>
                                 <li>Create an audit log entry</li>
+                                <li>Keep the record for audit purposes</li>
                             </ul>
                         </div>
                     </div>

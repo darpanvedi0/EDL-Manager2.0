@@ -15,6 +15,20 @@ $auth->require_permission('submit');
 $page_title = 'Submit Request';
 $error_message = '';
 
+// Enhanced ServiceNow ticket validation function
+function validate_servicenow_ticket_enhanced($ticket) {
+    if (empty($ticket)) {
+        return ['valid' => false, 'error' => 'ServiceNow ticket is required'];
+    }
+    
+    $pattern = '/^(INC|REQ|CHG|RITM|TASK|SCTASK|SIR)[0-9]{7}$/';
+    if (!preg_match($pattern, $ticket)) {
+        return ['valid' => false, 'error' => 'Invalid ServiceNow ticket format. Use: INC1234567, REQ1234567, CHG1234567, SIR1234567, etc.'];
+    }
+    
+    return ['valid' => true, 'type' => 'ServiceNow Ticket'];
+}
+
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!validate_csrf_token($_POST['csrf_token'] ?? '')) {
@@ -34,9 +48,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (empty($justification)) $errors[] = 'Justification is required';
         if (empty($servicenow_ticket)) $errors[] = 'ServiceNow ticket is required';
         
-        // Validate ServiceNow ticket format
+        // Validate ServiceNow ticket format using enhanced validation
         if (!empty($servicenow_ticket)) {
-            $snow_validation = validate_snow_ticket($servicenow_ticket);
+            $snow_validation = validate_servicenow_ticket_enhanced($servicenow_ticket);
             if (!$snow_validation['valid']) {
                 $errors[] = $snow_validation['error'];
             }
@@ -94,11 +108,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
             
-            // Check approved entries
+            // Check approved entries - FIXED: Only check entries with 'active' status
             if (empty($errors)) {
                 foreach ($approved_entries as $approved) {
-                    if ($approved['entry'] === $entry && $approved['type'] === $type) {
-                        $errors[] = 'This entry is already approved and active on the EDL.';
+                    if ($approved['entry'] === $entry && 
+                        $approved['type'] === $type && 
+                        isset($approved['status']) && 
+                        $approved['status'] === 'active') {
+                        
+                        $approved_by = htmlspecialchars($approved['approved_by'] ?? 'Unknown');
+                        $approved_date = isset($approved['approved_at']) ? 
+                            date('M j, Y H:i', strtotime($approved['approved_at'])) : 'Unknown';
+                        
+                        $errors[] = "This entry is already approved and active on the EDL (approved by {$approved_by} on {$approved_date}).";
                         break;
                     }
                 }
@@ -250,7 +272,7 @@ require_once '../includes/header.php';
                             <label for="servicenow_ticket" class="form-label fw-bold">ServiceNow Ticket <span class="text-danger">*</span></label>
                             <input type="text" class="form-control" id="servicenow_ticket" name="servicenow_ticket" 
                                    value="<?php echo htmlspecialchars($_POST['servicenow_ticket'] ?? ''); ?>"
-                                   placeholder="e.g., INC1234567, REQ1234567"
+                                   placeholder="e.g., INC1234567, REQ1234567, SIR1234567"
                                    required>
                             <div class="form-text">Required for audit and tracking purposes</div>
                         </div>
@@ -329,6 +351,12 @@ require_once '../includes/header.php';
                     <h6><i class="fas fa-exclamation-triangle text-danger"></i> Incident:</h6>
                     <code class="small d-block">INC1234567</code>
                     <small class="text-muted">For security incidents</small>
+                </div>
+                
+                <div class="mb-3">
+                    <h6><i class="fas fa-shield-alt text-danger"></i> Security Incident:</h6>
+                    <code class="small d-block">SIR1234567</code>
+                    <small class="text-muted">For security incident response</small>
                 </div>
                 
                 <div class="mb-3">
@@ -438,7 +466,7 @@ document.getElementById('entry').addEventListener('input', function() {
     }
 });
 
-// Validate ServiceNow ticket format
+// Validate ServiceNow ticket format (including SIR support)
 document.getElementById('servicenow_ticket').addEventListener('input', function() {
     const ticket = this.value.trim().toUpperCase();
     this.value = ticket;
@@ -449,15 +477,33 @@ document.getElementById('servicenow_ticket').addEventListener('input', function(
         /^CHG\d{7}$/,
         /^RITM\d{7}$/,
         /^TASK\d{7}$/,
-        /^SCTASK\d{7}$/
+        /^SCTASK\d{7}$/,
+        /^SIR\d{7}$/  // Added SIR support
     ];
     
     const isValid = patterns.some(pattern => pattern.test(ticket));
     
     if (ticket && !isValid) {
         this.classList.add('is-invalid');
+        // Show helpful feedback
+        const feedback = document.createElement('div');
+        feedback.className = 'invalid-feedback';
+        feedback.textContent = 'Format: INC1234567, REQ1234567, CHG1234567, SIR1234567, etc.';
+        
+        // Remove existing feedback
+        const existingFeedback = this.parentNode.querySelector('.invalid-feedback');
+        if (existingFeedback) {
+            existingFeedback.remove();
+        }
+        
+        this.parentNode.appendChild(feedback);
     } else {
         this.classList.remove('is-invalid');
+        // Remove feedback
+        const existingFeedback = this.parentNode.querySelector('.invalid-feedback');
+        if (existingFeedback) {
+            existingFeedback.remove();
+        }
     }
 });
 
@@ -479,4 +525,4 @@ document.getElementById('servicenow_ticket').addEventListener('input', function(
 })();
 </script>
 
-<?php require_once '../includes/footer.php'; ?>     
+<?php require_once '../includes/footer.php'; ?>

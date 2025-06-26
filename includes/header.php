@@ -1,5 +1,5 @@
 <?php
-// includes/header.php - Master Template with SSL Config and Standardized Navigation
+// includes/header.php - Master Template with Reduced Navigation Spacing
 // Determine correct paths
 $is_in_pages = strpos($_SERVER['PHP_SELF'], '/pages/') !== false;
 $is_in_api = strpos($_SERVER['PHP_SELF'], '/api/') !== false;
@@ -77,20 +77,32 @@ $is_admin_page_active = in_array($current_page, $admin_pages);
             color: #212529 !important;
         }
         
-        /* Professional Navigation Styling */
+        /* FIXED Navigation Container Alignment with Reduced Spacing */
         .navbar {
             padding: 0.75rem 0;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             border-bottom: 1px solid rgba(255,255,255,0.1);
         }
         
+        .navbar-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 15px;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        /* Brand positioning */
         .navbar-brand {
             font-size: 1.3rem;
             font-weight: 600;
             letter-spacing: -0.5px;
             padding: 0.5rem 0;
-            margin-right: 2rem;
+            margin-right: 0;
             white-space: nowrap;
+            flex-shrink: 0;
         }
         
         .navbar-brand i {
@@ -98,14 +110,34 @@ $is_admin_page_active = in_array($current_page, $admin_pages);
             margin-right: 8px;
         }
         
+        /* Main navigation centering with reduced spacing */
+        .navbar-nav-center {
+            display: flex;
+            justify-content: center;
+            flex-grow: 1;
+            margin: 0 1rem; /* Reduced from 2rem */
+        }
+        
+        .navbar-nav-center .navbar-nav {
+            display: flex;
+            align-items: center;
+            gap: 0; /* Removed gap */
+        }
+        
+        /* User navigation - always right */
+        .navbar-nav-right {
+            flex-shrink: 0;
+            margin-left: auto;
+        }
+        
         .navbar-nav .nav-item {
-            margin: 0 1px;
+            margin: 0; /* Reduced from 0 1px */
         }
         
         .navbar-nav .nav-link {
             font-size: 0.925rem;
             font-weight: 500;
-            padding: 0.75rem 1rem !important;
+            padding: 0.75rem 0.75rem !important; /* Reduced from 1rem */
             border-radius: 6px;
             transition: all 0.2s ease;
             color: rgba(255,255,255,0.9) !important;
@@ -113,6 +145,7 @@ $is_admin_page_active = in_array($current_page, $admin_pages);
             white-space: nowrap;
             display: flex;
             align-items: center;
+            margin: 0 2px; /* Added small margin between items */
         }
         
         .navbar-nav .nav-link:hover {
@@ -129,10 +162,22 @@ $is_admin_page_active = in_array($current_page, $admin_pages);
         
         .navbar-nav .nav-link i {
             font-size: 0.875rem;
-            margin-right: 8px;
+            margin-right: 6px; /* Reduced from 8px */
             width: 16px;
             text-align: center;
             flex-shrink: 0;
+        }
+        
+        /* Mobile hamburger positioning */
+        .navbar-toggler {
+            order: 2;
+            margin-left: 1rem;
+        }
+        
+        /* Mobile navigation */
+        .navbar-collapse {
+            order: 3;
+            flex-basis: 100%;
         }
         
         /* Dropdown Menu Professional Styling */
@@ -303,11 +348,30 @@ $is_admin_page_active = in_array($current_page, $admin_pages);
             max-width: 1200px;
         }
         
+        /* Main content container alignment */
+        .main-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 15px;
+        }
+        
         /* Responsive improvements */
         @media (max-width: 1200px) {
+            .navbar-container {
+                padding: 0 20px;
+            }
+            
+            .main-container {
+                padding: 0 20px;
+            }
+            
             .navbar-nav .nav-link {
-                padding: 0.6rem 0.8rem !important;
+                padding: 0.6rem 0.6rem !important; /* Adjusted for smaller screens */
                 font-size: 0.9rem;
+            }
+            
+            .navbar-nav-center {
+                margin: 0 0.5rem; /* Further reduced for smaller screens */
             }
         }
         
@@ -318,6 +382,20 @@ $is_admin_page_active = in_array($current_page, $admin_pages);
             
             .dropdown-menu {
                 min-width: 250px;
+            }
+            
+            .navbar-nav-center {
+                flex-direction: column;
+                margin: 1rem 0;
+            }
+            
+            .navbar-nav-right {
+                margin-left: 0;
+                margin-top: 1rem;
+            }
+            
+            .navbar-collapse {
+                text-align: center;
             }
         }
         
@@ -333,155 +411,171 @@ $is_admin_page_active = in_array($current_page, $admin_pages);
             .page-header h1 {
                 font-size: 1.75rem;
             }
+            
+            .navbar-container {
+                padding: 0 15px;
+            }
+            
+            .main-container {
+                padding: 0 15px;
+            }
         }
     </style>
 </head>
 <body>
     <!-- Navigation -->
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
-        <div class="container-fluid" style="max-width: 1200px; margin: 0 auto; padding: 0 1rem;">
+        <div class="navbar-container">
+            <!-- Brand -->
             <a class="navbar-brand" href="<?php echo $base_path; ?>index.php">
                 <i class="fas fa-shield-alt"></i>
                 <?php echo APP_NAME; ?>
             </a>
             
+            <!-- Mobile toggle button -->
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false">
                 <span class="navbar-toggler-icon"></span>
             </button>
             
+            <!-- Collapsible content -->
             <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
-                    <!-- Dashboard - Always visible -->
-                    <li class="nav-item">
-                        <a class="nav-link <?php echo isActive('index.php', $current_page); ?>" href="<?php echo $base_path; ?>index.php">
-                            <i class="fas fa-tachometer-alt"></i>Dashboard
-                        </a>
-                    </li>
-                    
-                    <!-- Submit Request - For users with submit permission -->
-                    <?php if (in_array('submit', $user_permissions)): ?>
-                    <li class="nav-item">
-                        <a class="nav-link <?php echo isActive('submit_request.php', $current_page); ?>" href="<?php echo $is_in_pages ? 'submit_request.php' : 'pages/submit_request.php'; ?>">
-                            <i class="fas fa-plus"></i>Submit Request
-                        </a>
-                    </li>
-                    <?php endif; ?>
-                    
-                    <!-- Approvals - For users with approve permission -->
-                    <?php if (in_array('approve', $user_permissions)): ?>
-                    <li class="nav-item">
-                        <a class="nav-link <?php echo isActive('approvals.php', $current_page); ?>" href="<?php echo $is_in_pages ? 'approvals.php' : 'pages/approvals.php'; ?>">
-                            <i class="fas fa-check-circle"></i>Approvals
-                            <?php if ($pending_count > 0): ?>
-                                <span class="badge bg-warning text-dark pending-count"><?php echo $pending_count; ?></span>
-                            <?php endif; ?>
-                        </a>
-                    </li>
-                    <?php endif; ?>
-                    
-                    <!-- My Requests - For authenticated users -->
-                    <li class="nav-item">
-                        <a class="nav-link <?php echo isActive('request_history.php', $current_page); ?>" href="<?php echo $is_in_pages ? 'request_history.php' : 'pages/request_history.php'; ?>">
-                            <i class="fas fa-history"></i>My Requests
-                        </a>
-                    </li>
-                    
-                    <!-- EDL Viewer - Always visible to authenticated users -->
-                    <li class="nav-item">
-                        <a class="nav-link <?php echo isActive('edl_viewer.php', $current_page); ?>" href="<?php echo $is_in_pages ? 'edl_viewer.php' : 'pages/edl_viewer.php'; ?>">
-                            <i class="fas fa-list"></i>EDL Viewer
-                        </a>
-                    </li>
-                    
-                    <!-- Denied Entries - Always visible to authenticated users -->
-                    <li class="nav-item">
-                        <a class="nav-link <?php echo isActive('denied_entries.php', $current_page); ?>" href="<?php echo $is_in_pages ? 'denied_entries.php' : 'pages/denied_entries.php'; ?>">
-                            <i class="fas fa-ban"></i>Denied Entries
-                        </a>
-                    </li>
-                    
-                    <!-- Admin Dropdown - For users with manage permission -->
-                    <?php if (in_array('manage', $user_permissions)): ?>
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle <?php echo $is_admin_page_active ? 'active' : ''; ?>" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            <i class="fas fa-cog"></i>Admin
-                        </a>
-                        <ul class="dropdown-menu" aria-labelledby="adminDropdown">
-                            <!-- Integration Section -->
-                            <li>
-                                <h6 class="dropdown-header">
-                                    <i class="fas fa-server text-primary"></i>Integration
-                                </h6>
-                            </li>
-                            <li><a class="dropdown-item <?php echo isActive('okta_config.php', $current_page); ?>" href="<?php echo $is_in_pages ? 'okta_config.php' : 'pages/okta_config.php'; ?>">
-                                <i class="fas fa-cloud text-primary"></i>Okta SSO Configuration
-                                <small class="text-muted d-block">Configure Single Sign-On</small>
-                            </a></li>
-                            <li><a class="dropdown-item <?php echo isActive('teams_config.php', $current_page); ?>" href="<?php echo $is_in_pages ? 'teams_config.php' : 'pages/teams_config.php'; ?>">
-                                <i class="fab fa-microsoft text-info"></i>Teams Notifications
-                                <small class="text-muted d-block">Configure Teams webhooks</small>
-                            </a></li>
-                            <li><a class="dropdown-item <?php echo isActive('ssl_config.php', $current_page); ?>" href="<?php echo $is_in_pages ? 'ssl_config.php' : 'pages/ssl_config.php'; ?>">
-                                <i class="fas fa-lock text-warning"></i>SSL/TLS Configuration
-                                <small class="text-muted d-block">Configure HTTPS encryption</small>
-                            </a></li>
-                            
-                            <li><hr class="dropdown-divider"></li>
-                            
-                            <!-- Data Management Section -->
-                            <li>
-                                <h6 class="dropdown-header">
-                                    <i class="fas fa-database text-secondary"></i>Data Management
-                                </h6>
-                            </li>
-                            <li><a class="dropdown-item <?php echo isActive('denied_entries.php', $current_page); ?>" href="<?php echo $is_in_pages ? 'denied_entries.php' : 'pages/denied_entries.php'; ?>">
-                                <i class="fas fa-ban text-danger"></i>Denied Entries
-                                <small class="text-muted d-block">View rejected requests</small>
-                            </a></li>
-                            <li><a class="dropdown-item <?php echo isActive('audit_log.php', $current_page); ?>" href="<?php echo $is_in_pages ? 'audit_log.php' : 'pages/audit_log.php'; ?>">
-                                <i class="fas fa-clipboard-list text-warning"></i>Audit Log
-                                <small class="text-muted d-block">System activity log</small>
-                            </a></li>
-                        </ul>
-                    </li>
-                    <?php endif; ?>
-                </ul>
+                <!-- Centered main navigation -->
+                <div class="navbar-nav-center">
+                    <ul class="navbar-nav">
+                        <!-- Dashboard - Always visible -->
+                        <li class="nav-item">
+                            <a class="nav-link <?php echo isActive('index.php', $current_page); ?>" href="<?php echo $base_path; ?>index.php">
+                                <i class="fas fa-tachometer-alt"></i>Dashboard
+                            </a>
+                        </li>
+                        
+                        <!-- Submit Request - For users with submit permission -->
+                        <?php if (in_array('submit', $user_permissions)): ?>
+                        <li class="nav-item">
+                            <a class="nav-link <?php echo isActive('submit_request.php', $current_page); ?>" href="<?php echo $is_in_pages ? 'submit_request.php' : 'pages/submit_request.php'; ?>">
+                                <i class="fas fa-plus"></i>Submit Request
+                            </a>
+                        </li>
+                        <?php endif; ?>
+                        
+                        <!-- Approvals - For users with approve permission -->
+                        <?php if (in_array('approve', $user_permissions)): ?>
+                        <li class="nav-item">
+                            <a class="nav-link <?php echo isActive('approvals.php', $current_page); ?>" href="<?php echo $is_in_pages ? 'approvals.php' : 'pages/approvals.php'; ?>">
+                                <i class="fas fa-check-circle"></i>Approvals
+                                <?php if ($pending_count > 0): ?>
+                                    <span class="badge bg-warning text-dark pending-count"><?php echo $pending_count; ?></span>
+                                <?php endif; ?>
+                            </a>
+                        </li>
+                        <?php endif; ?>
+                        
+                        <!-- My Requests - For authenticated users -->
+                        <li class="nav-item">
+                            <a class="nav-link <?php echo isActive('request_history.php', $current_page); ?>" href="<?php echo $is_in_pages ? 'request_history.php' : 'pages/request_history.php'; ?>">
+                                <i class="fas fa-history"></i>My Requests
+                            </a>
+                        </li>
+                        
+                        <!-- EDL Viewer - Always visible to authenticated users -->
+                        <li class="nav-item">
+                            <a class="nav-link <?php echo isActive('edl_viewer.php', $current_page); ?>" href="<?php echo $is_in_pages ? 'edl_viewer.php' : 'pages/edl_viewer.php'; ?>">
+                                <i class="fas fa-list"></i>EDL Viewer
+                            </a>
+                        </li>
+                        
+                        <!-- Denied Entries - Always visible to authenticated users -->
+                        <li class="nav-item">
+                            <a class="nav-link <?php echo isActive('denied_entries.php', $current_page); ?>" href="<?php echo $is_in_pages ? 'denied_entries.php' : 'pages/denied_entries.php'; ?>">
+                                <i class="fas fa-ban"></i>Denied Entries
+                            </a>
+                        </li>
+                        
+                        <!-- Admin Dropdown - For users with manage permission -->
+                        <?php if (in_array('manage', $user_permissions)): ?>
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle <?php echo $is_admin_page_active ? 'active' : ''; ?>" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="fas fa-cog"></i>Admin
+                            </a>
+                            <ul class="dropdown-menu" aria-labelledby="adminDropdown">
+                                <!-- Integration Section -->
+                                <li>
+                                    <h6 class="dropdown-header">
+                                        <i class="fas fa-server text-primary"></i>Integration
+                                    </h6>
+                                </li>
+                                <li><a class="dropdown-item <?php echo isActive('okta_config.php', $current_page); ?>" href="<?php echo $is_in_pages ? 'okta_config.php' : 'pages/okta_config.php'; ?>">
+                                    <i class="fas fa-cloud text-primary"></i>Okta SSO Configuration
+                                    <small class="text-muted d-block">Configure Single Sign-On</small>
+                                </a></li>
+                                <li><a class="dropdown-item <?php echo isActive('teams_config.php', $current_page); ?>" href="<?php echo $is_in_pages ? 'teams_config.php' : 'pages/teams_config.php'; ?>">
+                                    <i class="fab fa-microsoft text-info"></i>Teams Notifications
+                                    <small class="text-muted d-block">Configure Teams webhooks</small>
+                                </a></li>
+                                <li><a class="dropdown-item <?php echo isActive('ssl_config.php', $current_page); ?>" href="<?php echo $is_in_pages ? 'ssl_config.php' : 'pages/ssl_config.php'; ?>">
+                                    <i class="fas fa-lock text-warning"></i>SSL/TLS Configuration
+                                    <small class="text-muted d-block">Configure HTTPS encryption</small>
+                                </a></li>
+                                
+                                <li><hr class="dropdown-divider"></li>
+                                
+                                <!-- Data Management Section -->
+                                <li>
+                                    <h6 class="dropdown-header">
+                                        <i class="fas fa-database text-secondary"></i>Data Management
+                                    </h6>
+                                </li>
+                                <li><a class="dropdown-item <?php echo isActive('denied_entries.php', $current_page); ?>" href="<?php echo $is_in_pages ? 'denied_entries.php' : 'pages/denied_entries.php'; ?>">
+                                    <i class="fas fa-ban text-danger"></i>Denied Entries
+                                    <small class="text-muted d-block">View rejected requests</small>
+                                </a></li>
+                                <li><a class="dropdown-item <?php echo isActive('audit_log.php', $current_page); ?>" href="<?php echo $is_in_pages ? 'audit_log.php' : 'pages/audit_log.php'; ?>">
+                                    <i class="fas fa-clipboard-list text-warning"></i>Audit Log
+                                    <small class="text-muted d-block">System activity log</small>
+                                </a></li>
+                            </ul>
+                        </li>
+                        <?php endif; ?>
+                    </ul>
+                </div>
                 
-                <!-- Right side of navbar -->
-                <ul class="navbar-nav">
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            <i class="fas fa-user-circle"></i><?php echo htmlspecialchars($user_name); ?>
-                            <span class="role-badge role-<?php echo $user_role; ?>"><?php echo strtoupper($user_role); ?></span>
-                        </a>
-                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
-                            <li>
-                                <h6 class="dropdown-header">
-                                    <i class="fas fa-id-card text-primary"></i>User Profile
-                                </h6>
-                            </li>
-                            <li class="px-3 py-2">
-                                <small class="text-muted">Username:</small><br>
-                                <strong><?php echo htmlspecialchars($user_username); ?></strong>
-                            </li>
-                            <li class="px-3 py-2">
-                                <small class="text-muted">Email:</small><br>
-                                <strong><?php echo htmlspecialchars($user_email); ?></strong>
-                            </li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item text-danger" href="<?php echo $base_path; ?>logout.php">
-                                <i class="fas fa-sign-out-alt"></i>Logout
-                            </a></li>
-                        </ul>
-                    </li>
-                </ul>
+                <!-- Right side user navigation -->
+                <div class="navbar-nav-right">
+                    <ul class="navbar-nav">
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="fas fa-user-circle"></i><?php echo htmlspecialchars($user_name); ?>
+                                <span class="role-badge role-<?php echo $user_role; ?>"><?php echo strtoupper($user_role); ?></span>
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+                                <li>
+                                    <h6 class="dropdown-header">
+                                        <i class="fas fa-id-card text-primary"></i>User Profile
+                                    </h6>
+                                </li>
+                                <li class="px-3 py-2">
+                                    <small class="text-muted">Username:</small><br>
+                                    <strong><?php echo htmlspecialchars($user_username); ?></strong>
+                                </li>
+                                <li class="px-3 py-2">
+                                    <small class="text-muted">Email:</small><br>
+                                    <strong><?php echo htmlspecialchars($user_email); ?></strong>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item text-danger" href="<?php echo $base_path; ?>logout.php">
+                                    <i class="fas fa-sign-out-alt"></i>Logout
+                                </a></li>
+                            </ul>
+                        </li>
+                    </ul>
+                </div>
             </div>
         </div>
     </nav>
     
     <!-- Flash Messages -->
     <?php if ($flash): ?>
-    <div style="max-width: 1200px; margin: 0 auto; padding: 0 1rem;" class="mt-3">
+    <div class="main-container mt-3">
         <div class="alert alert-<?php echo $flash['type']; ?> alert-dismissible fade show" role="alert">
             <i class="fas fa-<?php echo $flash['type'] === 'success' ? 'check-circle' : ($flash['type'] === 'danger' ? 'exclamation-triangle' : 'info-circle'); ?>"></i>
             <?php echo htmlspecialchars($flash['message']); ?>
@@ -517,4 +611,4 @@ $is_admin_page_active = in_array($current_page, $admin_pages);
     </script>
     
     <!-- Main Content Container - DO NOT CLOSE THIS DIV - It's closed in footer.php -->
-    <div class="container mt-4">
+    <div class="main-container mt-4">

@@ -1,1 +1,38 @@
-[]
+[
+    {
+        "id": "app_685cc507873702.19087149",
+        "entry": "1.1.1.1",
+        "type": "ip",
+        "comment": "",
+        "justification": "Test",
+        "priority": "medium",
+        "submitted_by": "admin",
+        "submitted_at": "2025-06-26T05:56:47+02:00",
+        "approved_by": "admin",
+        "approved_at": "2025-06-26T05:56:55+02:00",
+        "admin_comment": "Approved.",
+        "status": "deleted",
+        "request_id": "req_685cc4ff3b0166.56123805",
+        "servicenow_ticket": "SIR1234567",
+        "deleted_by": "admin",
+        "deleted_at": "2025-06-26T05:57:06+02:00"
+    },
+    {
+        "id": "app_685cc5d2b19c40.33221827",
+        "entry": "1.1.1.1",
+        "type": "ip",
+        "comment": "",
+        "justification": "Test2",
+        "priority": "medium",
+        "submitted_by": "admin",
+        "submitted_at": "2025-06-26T06:00:11+02:00",
+        "approved_by": "admin",
+        "approved_at": "2025-06-26T06:00:18+02:00",
+        "admin_comment": "Test",
+        "status": "deleted",
+        "request_id": "req_685cc5cbab7562.70135203",
+        "servicenow_ticket": "SIR1234567",
+        "deleted_by": "admin",
+        "deleted_at": "2025-06-26T06:00:26+02:00"
+    }
+]

@@ -24,10 +24,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_admin) {
             if (!empty($entry_id)) {
                 $denied_entries = read_json_file(DATA_DIR . '/denied_entries.json');
                 $removed = false;
+                $removed_entry = null;
                 
                 foreach ($denied_entries as $key => $entry) {
                     if ($entry['id'] === $entry_id) {
-                        // Add audit log
+                        $removed_entry = $entry;
+                        
+                        // Add audit log before removal
                         $audit_logs = read_json_file(DATA_DIR . '/audit_logs.json');
                         $audit_logs[] = [
                             'id' => uniqid('audit_', true),
@@ -40,18 +43,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_admin) {
                         ];
                         write_json_file(DATA_DIR . '/audit_logs.json', $audit_logs);
                         
+                        // Remove the entry from array
                         unset($denied_entries[$key]);
                         $removed = true;
                         break;
                     }
                 }
                 
-                if ($removed) {
-                    write_json_file(DATA_DIR . '/denied_entries.json', array_values($denied_entries));
-                    show_flash('Entry removed from denied list successfully.', 'success');
+                if ($removed && $removed_entry) {
+                    // Reindex array and save
+                    $denied_entries_reindexed = array_values($denied_entries);
+                    if (write_json_file(DATA_DIR . '/denied_entries.json', $denied_entries_reindexed)) {
+                        show_flash("Entry '{$removed_entry['entry']}' removed from denied list successfully.", 'success');
+                        header('Location: denied_entries.php');
+                        exit;
+                    } else {
+                        $error_message = 'Failed to update denied entries file. Please check file permissions.';
+                    }
                 } else {
                     $error_message = 'Entry not found in denied list.';
                 }
+            } else {
+                $error_message = 'Invalid entry ID provided.';
             }
         } elseif ($action === 'add_manual_denial') {
             $entry = sanitize_input($_POST['entry'] ?? '');
@@ -80,7 +93,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_admin) {
                 // Check if already denied
                 $already_denied = false;
                 foreach ($denied_entries as $existing) {
-                    if ($existing['entry'] === $entry) {
+                    if ($existing['entry'] === $entry && $existing['type'] === $type) {
                         $already_denied = true;
                         break;
                     }
@@ -98,22 +111,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_admin) {
                     ];
                     
                     $denied_entries[] = $new_denial;
-                    write_json_file(DATA_DIR . '/denied_entries.json', $denied_entries);
                     
-                    // Add audit log
-                    $audit_logs = read_json_file(DATA_DIR . '/audit_logs.json');
-                    $audit_logs[] = [
-                        'id' => uniqid('audit_', true),
-                        'timestamp' => date('c'),
-                        'action' => 'manual_denial',
-                        'entry' => $entry,
-                        'user' => $_SESSION['username'],
-                        'details' => "Manually added {$type} to denied list",
-                        'admin_comment' => $reason
-                    ];
-                    write_json_file(DATA_DIR . '/audit_logs.json', $audit_logs);
-                    
-                    show_flash('Entry added to denied list successfully.', 'success');
+                    if (write_json_file(DATA_DIR . '/denied_entries.json', $denied_entries)) {
+                        // Add audit log
+                        $audit_logs = read_json_file(DATA_DIR . '/audit_logs.json');
+                        $audit_logs[] = [
+                            'id' => uniqid('audit_', true),
+                            'timestamp' => date('c'),
+                            'action' => 'manual_denial',
+                            'entry' => $entry,
+                            'user' => $_SESSION['username'],
+                            'details' => "Manually added {$type} to denied list",
+                            'admin_comment' => $reason
+                        ];
+                        write_json_file(DATA_DIR . '/audit_logs.json', $audit_logs);
+                        
+                        show_flash("Entry '{$entry}' added to denied list successfully.", 'success');
+                        header('Location: denied_entries.php');
+                        exit;
+                    } else {
+                        $error_message = 'Failed to save denied entries file. Please check file permissions.';
+                    }
                 } else {
                     $error_message = 'This entry is already in the denied list.';
                 }
@@ -342,13 +360,13 @@ require_once '../includes/header.php';
                             <?php if ($is_admin): ?>
                             <td>
                                 <form method="post" class="d-inline" 
-                                      onsubmit="return confirm('Delete this entry from the denied list?');">
+                                      onsubmit="return confirm('Remove this entry from the denied list? It will become available for submission again.');">
                                     <input type="hidden" name="action" value="remove_denial">
                                     <input type="hidden" name="entry_id" value="<?php echo $entry['id']; ?>">
                                     <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
-                                    <button type="submit" class="btn btn-sm btn-danger" 
-                                            title="Delete from denied list">
-                                        <i class="fas fa-times"></i>
+                                    <button type="submit" class="btn btn-sm btn-outline-success" 
+                                            title="Remove from denied list">
+                                        <i class="fas fa-undo"></i>
                                     </button>
                                 </form>
                             </td>
@@ -379,6 +397,22 @@ require_once '../includes/header.php';
         });
     }, false);
 })();
+
+// Auto-detect entry type
+document.getElementById('entry')?.addEventListener('input', function() {
+    const entry = this.value.trim();
+    const typeSelect = document.getElementById('type');
+    
+    if (entry && typeSelect.value === 'auto') {
+        if (/^https?:\/\//.test(entry)) {
+            typeSelect.value = 'url';
+        } else if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/.test(entry)) {
+            typeSelect.value = 'ip';
+        } else if (/^[a-zA-Z0-9][a-zA-Z0-9\.-]*\.[a-zA-Z]{2,}$/.test(entry)) {
+            typeSelect.value = 'domain';
+        }
+    }
+});
 </script>
 
 <?php require_once '../includes/footer.php'; ?>
