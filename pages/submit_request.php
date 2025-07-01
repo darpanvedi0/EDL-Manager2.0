@@ -432,13 +432,21 @@ require_once '../includes/header.php';
 </div>
 
 <script>
-// Auto-detect entry type and check against denied entries
+// FIXED: Auto-detect entry type with proper reset to auto-detect when field is cleared
 document.getElementById('entry').addEventListener('input', function() {
     const entry = this.value.trim();
     const typeSelect = document.getElementById('type');
     const indicator = document.getElementById('type-indicator');
     
-    if (entry && typeSelect.value === 'auto') {
+    // If entry is empty, reset to auto-detect and clear indicator
+    if (!entry) {
+        typeSelect.value = 'auto';
+        indicator.innerHTML = '';
+        return;
+    }
+    
+    // Only auto-detect if currently on auto-detect, or if user manually chose auto-detect
+    if (typeSelect.value === 'auto') {
         let detectedType = 'unknown';
         let icon = '';
         
@@ -461,8 +469,20 @@ document.getElementById('entry').addEventListener('input', function() {
         } else {
             indicator.innerHTML = '<small class="text-muted">Could not auto-detect type</small>';
         }
-    } else {
+    }
+});
+
+// Handle manual type selection changes
+document.getElementById('type').addEventListener('change', function() {
+    const entry = document.getElementById('entry').value.trim();
+    const indicator = document.getElementById('type-indicator');
+    
+    // Clear indicator when manually changing type
+    if (this.value !== 'auto') {
         indicator.innerHTML = '';
+    } else if (entry) {
+        // If switching back to auto-detect with content, trigger detection
+        document.getElementById('entry').dispatchEvent(new Event('input'));
     }
 });
 
