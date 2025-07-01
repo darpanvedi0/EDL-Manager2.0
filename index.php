@@ -164,18 +164,18 @@ include 'includes/header.php';
                 </div>
                 
                 <div class="col-lg-3 col-md-6 mb-2">
-                    <div class="dropdown w-100">
-                        <button class="btn btn-secondary dropdown-toggle w-100" type="button" data-bs-toggle="dropdown">
+                    <div class="dropup w-100">
+                        <button class="btn btn-secondary dropdown-toggle w-100" type="button" data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="fas fa-download me-2"></i> Download EDL
                         </button>
                         <ul class="dropdown-menu w-100">
-                            <li><a class="dropdown-item" href="edl-files/ip_blocklist.txt" target="_blank">
+                            <li><a class="dropdown-item" href="http://<?php echo $_SERVER['HTTP_HOST'] . dirname($_SERVER['REQUEST_URI']); ?>/edl-files/ip_blocklist.txt" target="_blank">
                                 <i class="fas fa-network-wired me-2"></i> IP Blocklist
                             </a></li>
-                            <li><a class="dropdown-item" href="edl-files/domain_blocklist.txt" target="_blank">
+                            <li><a class="dropdown-item" href="http://<?php echo $_SERVER['HTTP_HOST'] . dirname($_SERVER['REQUEST_URI']); ?>/edl-files/domain_blocklist.txt" target="_blank">
                                 <i class="fas fa-globe me-2"></i> Domain Blocklist
                             </a></li>
-                            <li><a class="dropdown-item" href="edl-files/url_blocklist.txt" target="_blank">
+                            <li><a class="dropdown-item" href="http://<?php echo $_SERVER['HTTP_HOST'] . dirname($_SERVER['REQUEST_URI']); ?>/edl-files/url_blocklist.txt" target="_blank">
                                 <i class="fas fa-link me-2"></i> URL Blocklist
                             </a></li>
                         </ul>
