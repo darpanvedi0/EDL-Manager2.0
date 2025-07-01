@@ -139,7 +139,7 @@ include '../includes/header.php';
             <i class="fas fa-cloud me-2"></i>
             Okta SSO Configuration
         </h1>
-        <p class="mb-0 opacity-75">Configure Single Sign-On with Okta for role-based access</p>
+        <p class="mb-0 opacity-75">Configure Single Sign-On with Okta for role-based access using OIDC</p>
     </div>
     
     <!-- Error Messages -->
@@ -202,7 +202,7 @@ include '../includes/header.php';
     <div class="card">
         <div class="card-header bg-light">
             <h5 class="mb-0">
-                <i class="fas fa-cloud text-primary me-2"></i> Okta Integration Settings
+                <i class="fas fa-cloud text-primary me-2"></i> Okta OIDC Integration Settings
             </h5>
         </div>
         <div class="card-body">
@@ -254,14 +254,14 @@ include '../includes/header.php';
                                     Admin (Full Access)
                                 </option>
                             </select>
-                            <div class="form-text">Role for users not in any mapped AD group</div>
+                            <div class="form-text">Role for users not in any mapped Okta group</div>
                         </div>
                     </div>
                 </div>
                 
                 <!-- Okta Connection Settings -->
                 <div class="group-mapping-section">
-                    <h6><i class="fas fa-server text-primary me-2"></i>Okta Connection</h6>
+                    <h6><i class="fas fa-server text-primary me-2"></i>Okta OIDC Connection</h6>
                     <div class="row">
                         <div class="col-md-6">
                             <div class="mb-3">
@@ -313,10 +313,15 @@ include '../includes/header.php';
                     </div>
                 </div>
                 
-                <!-- AD Group Mappings -->
+                <!-- Okta Group Mappings -->
                 <div class="group-mapping-section">
-                    <h6><i class="fas fa-users-cog text-primary me-2"></i>Active Directory Group Mappings</h6>
-                    <p class="text-muted mb-3">Map your AD groups to EDL Manager roles. Users will get the role of the first matching group.</p>
+                    <h6><i class="fas fa-users-cog text-primary me-2"></i>Okta Group Mappings</h6>
+                    <p class="text-muted mb-3">Map your Okta groups to EDL Manager roles. Users will get the role of the first matching group.</p>
+                    
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Note:</strong> These are Okta groups, not Active Directory groups. Configure your Okta application to include the "groups" claim in tokens.
+                    </div>
                     
                     <div class="row">
                         <div class="col-md-6">
@@ -327,7 +332,7 @@ include '../includes/header.php';
                                 <input type="text" class="form-control" id="admin_group" name="admin_group" 
                                        value="<?php echo htmlspecialchars($okta_config['group_mappings']['admin_group']); ?>"
                                        placeholder="EDL-Admins">
-                                <div class="form-text">Full access to all functions</div>
+                                <div class="form-text">Okta group with full access to all functions</div>
                             </div>
                             
                             <div class="mb-3">
@@ -337,7 +342,7 @@ include '../includes/header.php';
                                 <input type="text" class="form-control" id="approver_group" name="approver_group" 
                                        value="<?php echo htmlspecialchars($okta_config['group_mappings']['approver_group']); ?>"
                                        placeholder="EDL-Approvers">
-                                <div class="form-text">Can approve/deny requests</div>
+                                <div class="form-text">Okta group that can approve/deny requests</div>
                             </div>
                         </div>
                         
@@ -349,7 +354,7 @@ include '../includes/header.php';
                                 <input type="text" class="form-control" id="operator_group" name="operator_group" 
                                        value="<?php echo htmlspecialchars($okta_config['group_mappings']['operator_group']); ?>"
                                        placeholder="EDL-Operators">
-                                <div class="form-text">Can submit requests</div>
+                                <div class="form-text">Okta group that can submit requests</div>
                             </div>
                             
                             <div class="mb-3">
@@ -359,7 +364,7 @@ include '../includes/header.php';
                                 <input type="text" class="form-control" id="viewer_group" name="viewer_group" 
                                        value="<?php echo htmlspecialchars($okta_config['group_mappings']['viewer_group']); ?>"
                                        placeholder="EDL-Viewers">
-                                <div class="form-text">Read-only access</div>
+                                <div class="form-text">Okta group with read-only access</div>
                             </div>
                         </div>
                     </div>
@@ -393,17 +398,35 @@ include '../includes/header.php';
         <div class="card-body">
             <div class="row">
                 <div class="col-md-6">
-                    <h6><i class="fas fa-cloud text-primary me-2"></i>Okta Configuration Steps:</h6>
+                    <h6><i class="fas fa-cloud text-primary me-2"></i>Okta Application Setup:</h6>
                     <ol class="list-group list-group-numbered">
-                        <li class="list-group-item">Create a new Web application in Okta</li>
-                        <li class="list-group-item">Copy the Client ID and Client Secret</li>
-                        <li class="list-group-item">Set the redirect URI in your Okta app</li>
-                        <li class="list-group-item">Configure group assignments</li>
+                        <li class="list-group-item">Create a new <strong>Web Application</strong> in Okta Admin Console</li>
+                        <li class="list-group-item">Set <strong>Grant Types</strong>: Authorization Code</li>
+                        <li class="list-group-item">Add the redirect URI to your Okta app settings</li>
+                        <li class="list-group-item">Configure <strong>Scopes</strong>: openid, profile, email, groups</li>
+                        <li class="list-group-item">Copy Client ID and Client Secret</li>
                         <li class="list-group-item">Test the connection</li>
                     </ol>
                 </div>
                 <div class="col-md-6">
-                    <h6><i class="fas fa-users text-success me-2"></i>Role Permissions:</h6>
+                    <h6><i class="fas fa-users text-success me-2"></i>Okta Groups Configuration:</h6>
+                    <div class="alert alert-warning">
+                        <h6><i class="fas fa-exclamation-triangle me-2"></i>Important Setup Steps:</h6>
+                        <ol class="mb-0">
+                            <li>Create Okta groups (e.g., EDL-Admins, EDL-Approvers)</li>
+                            <li>Assign users to appropriate Okta groups</li>
+                            <li>In your Okta app, go to <strong>Sign On</strong> tab</li>
+                            <li>Click <strong>Edit</strong> on OpenID Connect ID Token</li>
+                            <li>Add <strong>Groups claim</strong>:
+                                <ul>
+                                    <li>Name: <code>groups</code></li>
+                                    <li>Filter: <code>Regex .*</code> (or specific pattern)</li>
+                                </ul>
+                            </li>
+                        </ol>
+                    </div>
+                    
+                    <h6><i class="fas fa-shield-alt text-info me-2"></i>Role Permissions:</h6>
                     <ul class="list-group">
                         <li class="list-group-item d-flex justify-content-between align-items-center">
                             <span><i class="fas fa-user-shield text-danger me-2"></i>Admin</span>
@@ -421,6 +444,47 @@ include '../includes/header.php';
                             <span><i class="fas fa-user text-info me-2"></i>Viewer</span>
                             <span class="badge bg-info rounded-pill">View Only</span>
                         </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Technical Details -->
+    <div class="card mt-4">
+        <div class="card-header bg-light">
+            <h5 class="mb-0">
+                <i class="fas fa-code text-secondary me-2"></i> Technical Implementation Details
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <h6><i class="fas fa-shield-alt text-primary me-2"></i>Security Features:</h6>
+                    <ul class="list-unstyled">
+                        <li><i class="fas fa-check text-success me-2"></i>OIDC (OpenID Connect) Protocol</li>
+                        <li><i class="fas fa-check text-success me-2"></i>OAuth 2.0 Authorization Code Flow</li>
+                        <li><i class="fas fa-check text-success me-2"></i>PKCE (Proof Key for Code Exchange)</li>
+                        <li><i class="fas fa-check text-success me-2"></i>JWT ID Token Validation</li>
+                        <li><i class="fas fa-check text-success me-2"></i>State Parameter for CSRF Protection</li>
+                        <li><i class="fas fa-check text-success me-2"></i>Session Timeout Management</li>
+                    </ul>
+                </div>
+                <div class="col-md-6">
+                    <h6><i class="fas fa-cogs text-info me-2"></i>OIDC Endpoints Used:</h6>
+                    <ul class="list-unstyled small">
+                        <li><code>/oauth2/v1/authorize</code> - Authorization</li>
+                        <li><code>/oauth2/v1/token</code> - Token Exchange</li>
+                        <li><code>/oauth2/v1/userinfo</code> - User Information</li>
+                        <li><code>/.well-known/openid_configuration</code> - Discovery</li>
+                    </ul>
+                    
+                    <h6><i class="fas fa-key text-warning me-2"></i>Required Scopes:</h6>
+                    <ul class="list-unstyled small">
+                        <li><code>openid</code> - Core OIDC</li>
+                        <li><code>profile</code> - User profile info</li>
+                        <li><code>email</code> - Email address</li>
+                        <li><code>groups</code> - Okta group membership</li>
                     </ul>
                 </div>
             </div>

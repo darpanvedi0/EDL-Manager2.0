@@ -1,5 +1,5 @@
 <?php
-// includes/header.php - Master Template with Reduced Navigation Spacing
+// includes/header.php - Master Template with Reduced Navigation Spacing + Favicon
 // Determine correct paths
 $is_in_pages = strpos($_SERVER['PHP_SELF'], '/pages/') !== false;
 $is_in_api = strpos($_SERVER['PHP_SELF'], '/api/') !== false;
@@ -49,6 +49,32 @@ function isActive($page_name, $current_page, $current_dir = '') {
 // Admin pages for dropdown highlighting
 $admin_pages = ['okta_config.php', 'teams_config.php', 'ssl_config.php', 'audit_log.php'];
 $is_admin_page_active = in_array($current_page, $admin_pages);
+
+// Generate base64 encoded security shield favicon
+$favicon_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+    <defs>
+        <linearGradient id="shieldGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#667eea"/>
+            <stop offset="100%" style="stop-color:#764ba2"/>
+        </linearGradient>
+    </defs>
+    <path d="M16 2L6 6v8c0 6.5 4.2 12.6 10 14.8 5.8-2.2 10-8.3 10-14.8V6L16 2z" fill="url(#shieldGradient)" stroke="#fff" stroke-width="1"/>
+    <path d="M16 8c-2.2 0-4 1.8-4 4v2h-1v6h10v-6h-1v-2c0-2.2-1.8-4-4-4zm0 2c1.1 0 2 0.9 2 2v2h-4v-2c0-1.1 0.9-2 2-2z" fill="#fff"/>
+</svg>';
+$favicon_base64 = 'data:image/svg+xml;base64,' . base64_encode($favicon_svg);
+
+// Generate ICO format for better browser support
+$favicon_ico_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
+    <defs>
+        <linearGradient id="sg" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#667eea"/>
+            <stop offset="100%" style="stop-color:#764ba2"/>
+        </linearGradient>
+    </defs>
+    <path d="M8 1L3 3v4c0 3.25 2.1 6.3 5 7.4 2.9-1.1 5-4.15 5-7.4V3L8 1z" fill="url(#sg)" stroke="#fff" stroke-width="0.5"/>
+    <path d="M8 4c-1.1 0-2 0.9-2 2v1h-0.5v3h5v-3H10V6c0-1.1-0.9-2-2-2zm0 1c0.55 0 1 0.45 1 1v1H7V6c0-0.55 0.45-1 1-1z" fill="#fff"/>
+</svg>';
+$favicon_ico_base64 = 'data:image/svg+xml;base64,' . base64_encode($favicon_ico_svg);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -56,6 +82,13 @@ $is_admin_page_active = in_array($current_page, $admin_pages);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo isset($page_title) ? $page_title . ' - ' . APP_NAME : APP_NAME; ?></title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="<?php echo $favicon_base64; ?>">
+    <link rel="icon" type="image/png" href="<?php echo $favicon_ico_base64; ?>">
+    <link rel="shortcut icon" href="<?php echo $favicon_ico_base64; ?>">
+    <link rel="apple-touch-icon" href="<?php echo $favicon_base64; ?>">
+    <meta name="theme-color" content="#667eea">
     
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">

@@ -115,18 +115,78 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $city = sanitize_input($_POST['csr_city'] ?? '');
             $organization = sanitize_input($_POST['csr_organization'] ?? '');
             $email = sanitize_input($_POST['csr_email'] ?? '');
+            $key_size = intval($_POST['key_size'] ?? 2048);
+            
+            // Process SAN entries
+            $san_entries = [];
+            if (!empty($_POST['san_entries'])) {
+                $san_lines = explode("\n", $_POST['san_entries']);
+                foreach ($san_lines as $san_line) {
+                    $san_entry = trim($san_line);
+                    if (!empty($san_entry)) {
+                        $san_entries[] = $san_entry;
+                    }
+                }
+            }
             
             if (empty($domain)) {
                 $error_message = 'Domain name is required to generate CSR.';
             } else {
-                $csr_result = generateCSR($domain, $country, $state, $city, $organization, $email);
+                $csr_result = generateCSR($domain, $country, $state, $city, $organization, $email, $key_size, $san_entries);
                 if ($csr_result['success']) {
-                    show_flash('CSR generated successfully. Check the generated files.', 'success');
+                    show_flash('CSR and private key generated successfully. Files are ready for download.', 'success');
                 } else {
                     $error_message = 'CSR generation failed: ' . $csr_result['message'];
                 }
             }
         }
+        
+        if ($action === 'upload_certificates') {
+            $upload_result = handleCertificateUpload();
+            if ($upload_result['success']) {
+                show_flash($upload_result['message'], 'success');
+                header('Location: ssl_config.php');
+                exit;
+            } else {
+                $error_message = $upload_result['message'];
+            }
+        }
+    }
+}
+
+// Handle file downloads
+if (isset($_GET['download'])) {
+    $file_type = sanitize_input($_GET['download']);
+    $ssl_dir = DATA_DIR . '/ssl';
+    
+    switch ($file_type) {
+        case 'csr':
+            $file_path = $ssl_dir . '/edl-manager.csr';
+            $filename = 'edl-manager.csr';
+            $content_type = 'application/pkcs10';
+            break;
+        case 'key':
+            $file_path = $ssl_dir . '/edl-manager.key';
+            $filename = 'edl-manager.key';
+            $content_type = 'application/x-pem-file';
+            break;
+        default:
+            $error_message = 'Invalid file type requested.';
+            break;
+    }
+    
+    if (isset($file_path) && file_exists($file_path)) {
+        header('Content-Type: ' . $content_type);
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Content-Length: ' . filesize($file_path));
+        header('Cache-Control: no-cache, must-revalidate');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+        
+        readfile($file_path);
+        exit;
+    } else {
+        $error_message = 'File not found. Please generate CSR first.';
     }
 }
 
@@ -180,7 +240,7 @@ function testSSLConfiguration($domain) {
     }
 }
 
-function generateCSR($domain, $country, $state, $city, $organization, $email) {
+function generateCSR($domain, $country, $state, $city, $organization, $email, $key_size = 2048, $san_entries = []) {
     if (!extension_loaded('openssl')) {
         return ['success' => false, 'message' => 'OpenSSL extension not available'];
     }
@@ -202,35 +262,161 @@ function generateCSR($domain, $country, $state, $city, $organization, $email) {
     
     $config = [
         'digest_alg' => 'sha256',
-        'private_key_bits' => 2048,
+        'private_key_bits' => $key_size,
         'private_key_type' => OPENSSL_KEYTYPE_RSA,
     ];
+    
+    // Add SAN extension if provided
+    if (!empty($san_entries)) {
+        $san_string = '';
+        foreach ($san_entries as $index => $san_entry) {
+            if ($index > 0) {
+                $san_string .= ',';
+            }
+            // Determine if it's an IP or DNS name
+            if (filter_var($san_entry, FILTER_VALIDATE_IP)) {
+                $san_string .= 'IP:' . $san_entry;
+            } else {
+                $san_string .= 'DNS:' . $san_entry;
+            }
+        }
+        
+        $config['req_extensions'] = 'v3_req';
+        $config['extensions'] = 'v3_req';
+        $config['v3_req'] = [
+            'subjectAltName' => $san_string
+        ];
+    }
     
     try {
         // Generate private key
         $private_key = openssl_pkey_new($config);
         if (!$private_key) {
-            return ['success' => false, 'message' => 'Failed to generate private key'];
+            return ['success' => false, 'message' => 'Failed to generate private key: ' . openssl_error_string()];
         }
         
         // Generate CSR
         $csr = openssl_csr_new($distinguished_name, $private_key, $config);
         if (!$csr) {
-            return ['success' => false, 'message' => 'Failed to generate CSR'];
+            return ['success' => false, 'message' => 'Failed to generate CSR: ' . openssl_error_string()];
         }
         
         // Export CSR and private key
         openssl_csr_export($csr, $csr_string);
         openssl_pkey_export($private_key, $private_key_string);
         
-        // Save files
-        file_put_contents($ssl_dir . '/edl-manager.csr', $csr_string);
-        file_put_contents($ssl_dir . '/edl-manager.key', $private_key_string);
-        chmod($ssl_dir . '/edl-manager.key', 0600);
+        // Save files with timestamp
+        $timestamp = date('Y-m-d_H-i-s');
+        $csr_file = $ssl_dir . '/edl-manager.csr';
+        $key_file = $ssl_dir . '/edl-manager.key';
         
-        return ['success' => true, 'message' => "CSR and private key generated in {$ssl_dir}/"];
+        // Also save timestamped versions for backup
+        $csr_backup = $ssl_dir . "/edl-manager_{$timestamp}.csr";
+        $key_backup = $ssl_dir . "/edl-manager_{$timestamp}.key";
+        
+        file_put_contents($csr_file, $csr_string);
+        file_put_contents($key_file, $private_key_string);
+        file_put_contents($csr_backup, $csr_string);
+        file_put_contents($key_backup, $private_key_string);
+        
+        chmod($key_file, 0600);
+        chmod($key_backup, 0600);
+        
+        // Create info file with details
+        $info = [
+            'generated_at' => date('c'),
+            'domain' => $domain,
+            'key_size' => $key_size,
+            'san_entries' => $san_entries,
+            'distinguished_name' => $distinguished_name
+        ];
+        file_put_contents($ssl_dir . '/csr_info.json', json_encode($info, JSON_PRETTY_PRINT));
+        
+        return ['success' => true, 'message' => "CSR and private key generated successfully. Key size: {$key_size} bits."];
     } catch (Exception $e) {
         return ['success' => false, 'message' => $e->getMessage()];
+    }
+}
+
+function handleCertificateUpload() {
+    $ssl_dir = DATA_DIR . '/ssl';
+    if (!is_dir($ssl_dir)) {
+        mkdir($ssl_dir, 0700, true);
+    }
+    
+    $uploaded_files = [];
+    $errors = [];
+    
+    // Handle certificate file upload
+    if (isset($_FILES['cert_file']) && $_FILES['cert_file']['error'] === UPLOAD_ERR_OK) {
+        $cert_content = file_get_contents($_FILES['cert_file']['tmp_name']);
+        if (validateCertificateContent($cert_content, 'certificate')) {
+            $cert_path = $ssl_dir . '/uploaded_certificate.crt';
+            file_put_contents($cert_path, $cert_content);
+            $uploaded_files[] = 'Certificate';
+        } else {
+            $errors[] = 'Invalid certificate file format';
+        }
+    }
+    
+    // Handle private key file upload
+    if (isset($_FILES['key_file']) && $_FILES['key_file']['error'] === UPLOAD_ERR_OK) {
+        $key_content = file_get_contents($_FILES['key_file']['tmp_name']);
+        if (validateCertificateContent($key_content, 'private_key')) {
+            $key_path = $ssl_dir . '/uploaded_private.key';
+            file_put_contents($key_path, $key_content);
+            chmod($key_path, 0600);
+            $uploaded_files[] = 'Private Key';
+        } else {
+            $errors[] = 'Invalid private key file format';
+        }
+    }
+    
+    // Handle certificate chain file upload (optional)
+    if (isset($_FILES['chain_file']) && $_FILES['chain_file']['error'] === UPLOAD_ERR_OK) {
+        $chain_content = file_get_contents($_FILES['chain_file']['tmp_name']);
+        if (validateCertificateContent($chain_content, 'certificate')) {
+            $chain_path = $ssl_dir . '/uploaded_chain.crt';
+            file_put_contents($chain_path, $chain_content);
+            $uploaded_files[] = 'Certificate Chain';
+        } else {
+            $errors[] = 'Invalid certificate chain file format';
+        }
+    }
+    
+    if (!empty($errors)) {
+        return ['success' => false, 'message' => 'Upload failed: ' . implode(', ', $errors)];
+    }
+    
+    if (empty($uploaded_files)) {
+        return ['success' => false, 'message' => 'No valid files were uploaded'];
+    }
+    
+    // Log the upload
+    $audit_logs = read_json_file(DATA_DIR . '/audit_logs.json');
+    $audit_logs[] = [
+        'id' => uniqid('audit_', true),
+        'timestamp' => date('c'),
+        'action' => 'certificate_upload',
+        'entry' => 'SSL Certificate Upload',
+        'user' => $_SESSION['username'],
+        'details' => 'Uploaded: ' . implode(', ', $uploaded_files)
+    ];
+    write_json_file(DATA_DIR . '/audit_logs.json', $audit_logs);
+    
+    return ['success' => true, 'message' => 'Successfully uploaded: ' . implode(', ', $uploaded_files)];
+}
+
+function validateCertificateContent($content, $type) {
+    switch ($type) {
+        case 'certificate':
+            return (strpos($content, '-----BEGIN CERTIFICATE-----') !== false && 
+                    strpos($content, '-----END CERTIFICATE-----') !== false);
+        case 'private_key':
+            return (strpos($content, '-----BEGIN PRIVATE KEY-----') !== false || 
+                    strpos($content, '-----BEGIN RSA PRIVATE KEY-----') !== false);
+        default:
+            return false;
     }
 }
 
@@ -424,6 +610,15 @@ function generateHtaccessConfig($ssl_config) {
     $config .= "</Files>\n";
     
     return $config;
+}
+
+// Check if generated files exist for download
+$ssl_dir = DATA_DIR . '/ssl';
+$csr_exists = file_exists($ssl_dir . '/edl-manager.csr');
+$key_exists = file_exists($ssl_dir . '/edl-manager.key');
+$csr_info = [];
+if (file_exists($ssl_dir . '/csr_info.json')) {
+    $csr_info = json_decode(file_get_contents($ssl_dir . '/csr_info.json'), true);
 }
 
 // Include the centralized header
@@ -703,7 +898,7 @@ require_once '../includes/header.php';
     </div>
 </div>
 
-<!-- Certificate Generation -->
+<!-- Enhanced Certificate Management -->
 <div class="card mt-4">
     <div class="card-header">
         <h5 class="mb-0">
@@ -712,16 +907,17 @@ require_once '../includes/header.php';
     </div>
     <div class="card-body">
         <div class="row">
+            <!-- CSR Generation -->
             <div class="col-md-6">
-                <h6>Generate Certificate Signing Request (CSR)</h6>
-                <p class="text-muted">Generate a CSR and private key for obtaining an SSL certificate from a Certificate Authority.</p>
+                <h6><i class="fas fa-certificate me-2"></i>Generate Certificate Signing Request (CSR)</h6>
+                <p class="text-muted">Generate a CSR and private key with support for Subject Alternative Names (SAN).</p>
                 
                 <form method="POST" class="mb-3">
                     <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
                     <input type="hidden" name="action" value="generate_csr">
                     <input type="hidden" name="domain_name" value="<?php echo htmlspecialchars($ssl_config['domain_name']); ?>">
                     
-                    <div class="row g-2">
+                    <div class="row g-2 mb-3">
                         <div class="col-md-6">
                             <input type="text" class="form-control form-control-sm" name="csr_country" placeholder="Country (US)" value="US">
                         </div>
@@ -739,38 +935,148 @@ require_once '../includes/header.php';
                         </div>
                     </div>
                     
-                    <button type="submit" class="btn btn-warning btn-sm mt-2">
-                        <i class="fas fa-certificate"></i> Generate CSR
+                    <div class="mb-3">
+                        <label for="key_size" class="form-label fw-bold">Key Size</label>
+                        <select class="form-select form-select-sm" name="key_size" id="key_size">
+                            <option value="2048">2048 bits (Standard)</option>
+                            <option value="3072">3072 bits (Enhanced)</option>
+                            <option value="4096">4096 bits (Maximum)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="san_entries" class="form-label fw-bold">Subject Alternative Names (SAN)</label>
+                        <textarea class="form-control form-control-sm" name="san_entries" id="san_entries" rows="4" 
+                                  placeholder="Enter additional domains/IPs (one per line)&#10;www.edl-manager.company.com&#10;edl.company.com&#10;192.168.1.100"></textarea>
+                        <div class="form-text">One domain or IP per line. Mix of domains and IPs is supported.</div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-warning btn-sm">
+                        <i class="fas fa-certificate"></i> Generate CSR & Private Key
                     </button>
                 </form>
+                
+                <!-- Download Generated Files -->
+                <?php if ($csr_exists || $key_exists): ?>
+                <div class="alert alert-success">
+                    <h6 class="alert-heading"><i class="fas fa-check-circle"></i> Generated Files Available</h6>
+                    <?php if (!empty($csr_info)): ?>
+                        <p class="mb-2"><strong>Generated:</strong> <?php echo date('M j, Y H:i', strtotime($csr_info['generated_at'])); ?></p>
+                        <p class="mb-2"><strong>Domain:</strong> <?php echo htmlspecialchars($csr_info['domain']); ?></p>
+                        <p class="mb-2"><strong>Key Size:</strong> <?php echo $csr_info['key_size']; ?> bits</p>
+                        <?php if (!empty($csr_info['san_entries'])): ?>
+                            <p class="mb-2"><strong>SAN Entries:</strong> <?php echo implode(', ', $csr_info['san_entries']); ?></p>
+                        <?php endif; ?>
+                    <?php endif; ?>
+                    <div class="d-flex gap-2 mt-3">
+                        <?php if ($csr_exists): ?>
+                            <a href="?download=csr" class="btn btn-outline-primary btn-sm">
+                                <i class="fas fa-download"></i> Download CSR
+                            </a>
+                        <?php endif; ?>
+                        <?php if ($key_exists): ?>
+                            <a href="?download=key" class="btn btn-outline-danger btn-sm">
+                                <i class="fas fa-download"></i> Download Private Key
+                            </a>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <?php endif; ?>
             </div>
             
+            <!-- Certificate Upload -->
             <div class="col-md-6">
-                <h6>Certificate Options</h6>
-                <div class="list-group list-group-flush">
+                <h6><i class="fas fa-upload me-2"></i>Upload SSL Certificates</h6>
+                <p class="text-muted">Upload your SSL certificate files received from your Certificate Authority.</p>
+                
+                <form method="POST" enctype="multipart/form-data">
+                    <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                    <input type="hidden" name="action" value="upload_certificates">
+                    
+                    <div class="mb-3">
+                        <label for="cert_file" class="form-label fw-bold">SSL Certificate (.crt, .pem)</label>
+                        <input type="file" class="form-control form-control-sm" id="cert_file" name="cert_file" 
+                               accept=".crt,.pem,.cer,.cert">
+                        <div class="form-text">Main SSL certificate file</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="key_file" class="form-label fw-bold">Private Key (.key, .pem)</label>
+                        <input type="file" class="form-control form-control-sm" id="key_file" name="key_file" 
+                               accept=".key,.pem">
+                        <div class="form-text">Private key file (generated with CSR)</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="chain_file" class="form-label fw-bold">Certificate Chain (Optional)</label>
+                        <input type="file" class="form-control form-control-sm" id="chain_file" name="chain_file" 
+                               accept=".crt,.pem,.cer,.cert">
+                        <div class="form-text">Intermediate/Chain certificates</div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-success btn-sm">
+                        <i class="fas fa-upload"></i> Upload Certificates
+                    </button>
+                </form>
+                
+                <!-- Upload Guidelines -->
+                <div class="alert alert-info mt-3">
+                    <h6 class="alert-heading"><i class="fas fa-info-circle"></i> Upload Guidelines</h6>
+                    <ul class="mb-0 small">
+                        <li>Files will be uploaded to: <code><?php echo $ssl_dir; ?>/</code></li>
+                        <li>Supported formats: .crt, .pem, .cer, .cert, .key</li>
+                        <li>Files must contain valid PEM-encoded data</li>
+                        <li>Private keys will be secured with 600 permissions</li>
+                        <li>Update the paths above after successful upload</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Certificate Options -->
+<div class="card mt-4">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="fas fa-certificate text-info me-2"></i> Certificate Authority Options
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-4">
+                <div class="list-group">
                     <div class="list-group-item">
                         <div class="d-flex w-100 justify-content-between">
-                            <h6 class="mb-1">Let's Encrypt (Free)</h6>
-                            <small>Recommended</small>
+                            <h6 class="mb-1"><i class="fas fa-robot text-success"></i> Let's Encrypt (Free)</h6>
+                            <small class="text-success">Recommended</small>
                         </div>
-                        <p class="mb-1">Free SSL certificates with automatic renewal.</p>
+                        <p class="mb-1">Free SSL certificates with automatic renewal. Supports SAN.</p>
                         <small>Use Certbot: <code>certbot --apache -d <?php echo htmlspecialchars($ssl_config['domain_name']); ?></code></small>
                     </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="list-group">
                     <div class="list-group-item">
                         <div class="d-flex w-100 justify-content-between">
-                            <h6 class="mb-1">Commercial CA</h6>
-                            <small>DigiCert, Comodo, etc.</small>
+                            <h6 class="mb-1"><i class="fas fa-building text-primary"></i> Commercial CA</h6>
+                            <small class="text-primary">Enterprise</small>
                         </div>
-                        <p class="mb-1">Purchase from commercial Certificate Authority.</p>
-                        <small>Use generated CSR to purchase certificate</small>
+                        <p class="mb-1">DigiCert, Comodo, GlobalSign, etc. Enterprise features.</p>
+                        <small>Use generated CSR to purchase certificate with SAN support</small>
                     </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="list-group">
                     <div class="list-group-item">
                         <div class="d-flex w-100 justify-content-between">
-                            <h6 class="mb-1">Self-Signed</h6>
-                            <small>Testing only</small>
+                            <h6 class="mb-1"><i class="fas fa-tools text-warning"></i> Internal CA</h6>
+                            <small class="text-warning">Testing</small>
                         </div>
-                        <p class="mb-1">For development and testing environments.</p>
-                        <small>Not recommended for production</small>
+                        <p class="mb-1">Self-signed or internal CA for testing environments.</p>
+                        <small>Use generated CSR with your internal Certificate Authority</small>
                     </div>
                 </div>
             </div>
@@ -947,13 +1253,13 @@ RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
             </div>
             
             <div class="col-md-6">
-                <h6>EDL Files HTTP Access</h6>
+                <h6>SAN Certificate Benefits</h6>
                 <ul class="list-unstyled">
-                    <li><i class="fas fa-info text-info me-2"></i> Firewall devices expect HTTP access</li>
-                    <li><i class="fas fa-info text-info me-2"></i> .txt files remain on port 80</li>
-                    <li><i class="fas fa-info text-info me-2"></i> Admin interface uses HTTPS</li>
-                    <li><i class="fas fa-info text-info me-2"></i> Separate virtual hosts handle both</li>
-                    <li><i class="fas fa-info text-info me-2"></i> Best of both worlds approach</li>
+                    <li><i class="fas fa-star text-warning me-2"></i> One certificate for multiple domains</li>
+                    <li><i class="fas fa-star text-warning me-2"></i> Covers www and non-www versions</li>
+                    <li><i class="fas fa-star text-warning me-2"></i> Supports internal and external access</li>
+                    <li><i class="fas fa-star text-warning me-2"></i> Cost-effective for multiple endpoints</li>
+                    <li><i class="fas fa-star text-warning me-2"></i> Simplified certificate management</li>
                 </ul>
             </div>
         </div>
@@ -966,36 +1272,36 @@ RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
                 <ol class="list-group list-group-numbered">
                     <li class="list-group-item d-flex justify-content-between align-items-start">
                         <div class="ms-2 me-auto">
-                            <div class="fw-bold">Configure Domain and Paths</div>
-                            Set your domain name and certificate file paths in the form above
+                            <div class="fw-bold">Configure Domain and SAN</div>
+                            Set your primary domain and additional Subject Alternative Names
                         </div>
                         <span class="badge bg-primary rounded-pill">1</span>
                     </li>
                     <li class="list-group-item d-flex justify-content-between align-items-start">
                         <div class="ms-2 me-auto">
-                            <div class="fw-bold">Obtain SSL Certificate</div>
-                            Generate CSR or use Let's Encrypt to get your SSL certificate
+                            <div class="fw-bold">Generate CSR & Private Key</div>
+                            Use the enhanced CSR generator with SAN support
                         </div>
                         <span class="badge bg-primary rounded-pill">2</span>
                     </li>
                     <li class="list-group-item d-flex justify-content-between align-items-start">
                         <div class="ms-2 me-auto">
-                            <div class="fw-bold">Update Web Server Configuration</div>
-                            Download and apply the generated Apache/Nginx configuration
+                            <div class="fw-bold">Obtain SSL Certificate</div>
+                            Submit CSR to CA or use Let's Encrypt
                         </div>
                         <span class="badge bg-primary rounded-pill">3</span>
                     </li>
                     <li class="list-group-item d-flex justify-content-between align-items-start">
                         <div class="ms-2 me-auto">
-                            <div class="fw-bold">Test SSL Configuration</div>
-                            Use the "Test SSL" button to verify your setup
+                            <div class="fw-bold">Upload Certificates</div>
+                            Use the upload feature to install your certificates
                         </div>
                         <span class="badge bg-primary rounded-pill">4</span>
                     </li>
                     <li class="list-group-item d-flex justify-content-between align-items-start">
                         <div class="ms-2 me-auto">
-                            <div class="fw-bold">Enable SSL in Application</div>
-                            Save the configuration to enable SSL features
+                            <div class="fw-bold">Test & Enable SSL</div>
+                            Test the configuration and enable SSL features
                         </div>
                         <span class="badge bg-success rounded-pill">5</span>
                     </li>
@@ -1105,13 +1411,63 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Auto-update domain in configuration previews
+    // Auto-update domain in SAN textarea
     document.getElementById('domain_name').addEventListener('input', function() {
         const domain = this.value;
-        // Update all domain references in the preview configs
-        // This would be enhanced with real-time preview updates
+        const sanTextarea = document.getElementById('san_entries');
+        if (domain && !sanTextarea.value.includes('www.' + domain)) {
+            if (sanTextarea.value) {
+                sanTextarea.value += '\n';
+            }
+            sanTextarea.value += 'www.' + domain;
+        }
+    });
+    
+    // File upload validation
+    const fileInputs = document.querySelectorAll('input[type="file"]');
+    fileInputs.forEach(input => {
+        input.addEventListener('change', function() {
+            const file = this.files[0];
+            if (file) {
+                const maxSize = 5 * 1024 * 1024; // 5MB
+                if (file.size > maxSize) {
+                    showNotification('File size must be less than 5MB', 'warning');
+                    this.value = '';
+                }
+            }
+        });
     });
 });
+
+// Show notification function
+function showNotification(message, type = 'info') {
+    const alertClass = 'alert-' + type;
+    const notification = document.createElement('div');
+    notification.className = `alert ${alertClass} alert-dismissible position-fixed`;
+    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    
+    const icons = {
+        'success': 'fas fa-check-circle',
+        'danger': 'fas fa-exclamation-triangle',
+        'warning': 'fas fa-exclamation-circle',
+        'info': 'fas fa-info-circle'
+    };
+    const icon = icons[type] || icons['info'];
+    
+    notification.innerHTML = `
+        <i class="${icon} me-2"></i>
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.remove();
+        }
+    }, 5000);
+}
 </script>
 
 <?php require_once '../includes/footer.php'; ?>

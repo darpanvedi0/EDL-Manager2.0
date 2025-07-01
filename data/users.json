@@ -1,6 +1,6 @@
 {
     "admin": {
-        "password": "$2y$10$7hi5TmjthjxorMjkCDaJVeM\/3bM9F2hPIlPvMnMjzVIFbtINdia8y",
+        "password": "$2a$12$2NYBgFYaLKinqcdxS4l7xuoq5yxGkDB9pDRR0u1xg5GgHhJcSoLTK",
         "name": "System Administrator",
         "email": "admin@company.com",
         "role": "admin",
@@ -13,7 +13,7 @@
         ]
     },
     "approver": {
-        "password": "$2y$10$dwoa5ljyST2mWUeVj6ZGj.bfJ..chzsT5n23tzHmIwQypds4t94Ze",
+        "password": "$2a$12$5rKDqsbdZLe8t82K.weTnOtwDFtkOf/gp3yyWf7fF.p38l0SKVrOK",
         "name": "Security Approver",
         "email": "approver@company.com",
         "role": "approver",
@@ -23,7 +23,7 @@
         ]
     },
     "operator": {
-        "password": "$2y$10$DqbFEQVc04AlpwYBTj\/boOgcbTqACSw7dNxt3RwljAVu5IpQdd78G",
+        "password": "$2a$12$3Vqfxz27vp98UviY152seuMM/bd8X4FYqEBkVIKwudVQq7UtN17R.",
         "name": "Security Operator",
         "email": "operator@company.com",
         "role": "operator",
