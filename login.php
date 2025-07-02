@@ -12,10 +12,18 @@ require_once 'includes/auth.php';
 $okta_enabled = false;
 $allow_local_fallback = true;
 if (file_exists('includes/okta_auth.php')) {
-    require_once 'includes/okta_auth.php';
-    $okta_auth = new OktaAuth();
-    $okta_enabled = $okta_auth->is_enabled();
-    $allow_local_fallback = $okta_auth->allow_local_fallback();
+    try {
+        require_once 'includes/okta_auth.php';
+        if (class_exists('OktaAuth')) {
+            $okta_auth = new OktaAuth();
+            $okta_enabled = $okta_auth->is_enabled();
+            $allow_local_fallback = $okta_auth->allow_local_fallback();
+        }
+    } catch (Exception $e) {
+        // If Okta fails to load, continue with local auth only
+        $okta_enabled = false;
+        $allow_local_fallback = true;
+    }
 }
 
 $auth = new EDLAuth();
@@ -319,11 +327,14 @@ $favicon_ico_base64 = 'data:image/svg+xml;base64,' . base64_encode($favicon_ico_
             font-size: 16px;
             color: white;
             width: 100%;
-            margin-bottom: 1rem;
+            margin-bottom: 1.5rem;
             text-decoration: none;
             transition: all 0.3s ease;
             position: relative;
             overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
         
         .btn-okta:hover {
@@ -331,6 +342,21 @@ $favicon_ico_base64 = 'data:image/svg+xml;base64,' . base64_encode($favicon_ico_
             box-shadow: 0 8px 25px rgba(0, 122, 204, 0.4);
             color: white;
             text-decoration: none;
+        }
+        
+        .btn-okta::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }
+        
+        .btn-okta:hover::before {
+            left: 100%;
         }
         
         .divider {
@@ -428,96 +454,53 @@ $favicon_ico_base64 = 'data:image/svg+xml;base64,' . base64_encode($favicon_ico_
                     </div>
                 <?php endif; ?>
                 
-                <?php if ($okta_enabled): ?>
-                    <!-- Okta SSO Login Button -->
-                    <a href="okta/login.php" class="btn btn-okta d-flex align-items-center justify-content-center">
-                        <i class="fas fa-cloud me-2"></i>
-                        Sign in with Okta SSO
-                    </a>
-                    
-                    <?php if ($allow_local_fallback): ?>
-                    <div class="divider">
-                        <span>or use local account</span>
+                <!-- Always show Okta SSO option -->
+                <a href="okta/login.php" class="btn btn-okta">
+                    <i class="fas fa-building me-2"></i>
+                    Sign in with Okta SSO
+                </a>
+                
+                <div class="divider">
+                    <span>or use local account</span>
+                </div>
+                
+                <!-- Local Login Form -->
+                <form method="POST" class="needs-validation" novalidate>
+                    <div class="mb-3">
+                        <label for="username" class="form-label fw-bold">Username</label>
+                        <div class="input-group">
+                            <span class="input-group-text">
+                                <i class="fas fa-user text-muted"></i>
+                            </span>
+                            <input type="text" class="form-control" id="username" name="username" 
+                                   value="<?php echo htmlspecialchars($_POST['username'] ?? ''); ?>"
+                                   required autocomplete="username"
+                                   placeholder="Enter your username">
+                        </div>
                     </div>
                     
-                    <!-- Local Login Form (Fallback) -->
-                    <form method="POST" class="needs-validation" novalidate>
-                        <div class="mb-3">
-                            <label for="username" class="form-label fw-bold">Username</label>
-                            <div class="input-group">
-                                <span class="input-group-text">
-                                    <i class="fas fa-user text-muted"></i>
-                                </span>
-                                <input type="text" class="form-control" id="username" name="username" 
-                                       value="<?php echo htmlspecialchars($_POST['username'] ?? ''); ?>"
-                                       required autocomplete="username"
-                                       placeholder="Local account username">
-                            </div>
-                        </div>
-                        
-                        <div class="mb-4">
-                            <label for="password" class="form-label fw-bold">Password</label>
-                            <div class="input-group">
-                                <span class="input-group-text">
-                                    <i class="fas fa-lock text-muted"></i>
-                                </span>
-                                <input type="password" class="form-control" id="password" name="password" 
-                                       required autocomplete="current-password"
-                                       placeholder="Local account password">
-                                <button class="btn btn-outline-secondary" type="button" id="togglePassword">
-                                    <i class="fas fa-eye"></i>
-                                </button>
-                            </div>
-                        </div>
-                        
-                        <div class="d-grid">
-                            <button type="submit" class="btn btn-primary btn-login">
-                                <i class="fas fa-key me-2"></i>
-                                Local Login
+                    <div class="mb-4">
+                        <label for="password" class="form-label fw-bold">Password</label>
+                        <div class="input-group">
+                            <span class="input-group-text">
+                                <i class="fas fa-lock text-muted"></i>
+                            </span>
+                            <input type="password" class="form-control" id="password" name="password" 
+                                   required autocomplete="current-password"
+                                   placeholder="Enter your password">
+                            <button class="btn btn-outline-secondary" type="button" id="togglePassword">
+                                <i class="fas fa-eye"></i>
                             </button>
                         </div>
-                    </form>
-                    <?php endif; ?>
+                    </div>
                     
-                <?php else: ?>
-                    <!-- Traditional Login Form (SSO Disabled) -->
-                    <form method="POST" class="needs-validation" novalidate>
-                        <div class="mb-3">
-                            <label for="username" class="form-label fw-bold">Username</label>
-                            <div class="input-group">
-                                <span class="input-group-text">
-                                    <i class="fas fa-user text-muted"></i>
-                                </span>
-                                <input type="text" class="form-control" id="username" name="username" 
-                                       value="<?php echo htmlspecialchars($_POST['username'] ?? ''); ?>"
-                                       required autocomplete="username" autofocus
-                                       placeholder="Enter your username">
-                            </div>
-                        </div>
-                        
-                        <div class="mb-4">
-                            <label for="password" class="form-label fw-bold">Password</label>
-                            <div class="input-group">
-                                <span class="input-group-text">
-                                    <i class="fas fa-lock text-muted"></i>
-                                </span>
-                                <input type="password" class="form-control" id="password" name="password" 
-                                       required autocomplete="current-password"
-                                       placeholder="Enter your password">
-                                <button class="btn btn-outline-secondary" type="button" id="togglePassword">
-                                    <i class="fas fa-eye"></i>
-                                </button>
-                            </div>
-                        </div>
-                        
-                        <div class="d-grid">
-                            <button type="submit" class="btn btn-primary btn-login">
-                                <i class="fas fa-sign-in-alt me-2"></i>
-                                Sign In
-                            </button>
-                        </div>
-                    </form>
-                <?php endif; ?>
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary btn-login">
+                            <i class="fas fa-sign-in-alt me-2"></i>
+                            Sign In
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
