@@ -1,8 +1,7 @@
 <?php
-// okta/callback.php - FIXED with correct paths
+// okta/callback.php - Updated for org-level Okta auth
 require_once '../config/config.php';
 require_once '../includes/functions.php';
-require_once '../includes/okta_auth.php';
 
 session_start();
 
@@ -19,7 +18,29 @@ try {
         throw new Exception('No authorization code received');
     }
     
-    $okta_auth = new OktaAuth();
+    // Try org-level Okta auth first
+    $okta_auth = null;
+    if (file_exists('../includes/okta_auth_org.php')) {
+        require_once '../includes/okta_auth_org.php';
+        if (class_exists('OktaAuthOrg')) {
+            $okta_auth = new OktaAuthOrg();
+            error_log('DEBUG: Using OktaAuthOrg for callback processing');
+        }
+    }
+    
+    // Fallback to regular Okta auth
+    if (!$okta_auth && file_exists('../includes/okta_auth.php')) {
+        require_once '../includes/okta_auth.php';
+        if (class_exists('OktaAuth')) {
+            $okta_auth = new OktaAuth();
+            error_log('DEBUG: Using OktaAuth for callback processing');
+        }
+    }
+    
+    if (!$okta_auth) {
+        throw new Exception('No Okta authentication class available');
+    }
+    
     $okta_auth->handle_callback($code, $state);
     
     // Successful authentication
@@ -32,7 +53,7 @@ try {
     error_log('Okta Callback Error: ' . $e->getMessage());
     show_flash('SSO authentication failed: ' . $e->getMessage(), 'danger');
     $base_path = get_app_base_path();
-    header('Location: ' . $base_path . 'login.php');
+    header('Location: ' . $base_path . 'login.php?error=okta_failed');
     exit;
 }
 
