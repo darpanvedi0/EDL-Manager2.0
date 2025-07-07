@@ -1,5 +1,5 @@
 <?php
-// login.php - Fixed with proper Okta integration + Favicon + Matrix Binary Rain Background
+// login.php - Fixed with org-level Okta integration + Original Matrix UI
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
@@ -8,18 +8,39 @@ require_once 'config/config.php';
 require_once 'includes/functions.php';
 require_once 'includes/auth.php';
 
-// Check if Okta auth file exists and load it
+// Check if Okta auth file exists and load it - TRY ORG-LEVEL FIRST
 $okta_enabled = false;
 $allow_local_fallback = true;
-if (file_exists('includes/okta_auth.php')) {
+
+// Try org-level Okta auth first
+if (file_exists('includes/okta_auth_org.php')) {
+    try {
+        require_once 'includes/okta_auth_org.php';
+        if (class_exists('OktaAuthOrg')) {
+            $okta_auth = new OktaAuthOrg();
+            $okta_enabled = $okta_auth->is_enabled();
+            $allow_local_fallback = $okta_auth->allow_local_fallback();
+            error_log('DEBUG: Using OktaAuthOrg class');
+        }
+    } catch (Exception $e) {
+        error_log('Okta Org Auth failed to load: ' . $e->getMessage());
+        $okta_enabled = false;
+        $allow_local_fallback = true;
+    }
+}
+
+// Fallback to regular Okta auth if org-level not available
+if (!$okta_enabled && file_exists('includes/okta_auth.php')) {
     try {
         require_once 'includes/okta_auth.php';
         if (class_exists('OktaAuth')) {
             $okta_auth = new OktaAuth();
             $okta_enabled = $okta_auth->is_enabled();
             $allow_local_fallback = $okta_auth->allow_local_fallback();
+            error_log('DEBUG: Using OktaAuth class (fallback)');
         }
     } catch (Exception $e) {
+        error_log('Regular Okta Auth failed to load: ' . $e->getMessage());
         // If Okta fails to load, continue with local auth only
         $okta_enabled = false;
         $allow_local_fallback = true;
