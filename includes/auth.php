@@ -1,5 +1,5 @@
 <?php
-// includes/auth.php - FIXED VERSION with corrected login redirect
+// includes/auth.php - FIXED VERSION to prevent Okta session conflicts
 class EDLAuth {
     private $users_file;
     
@@ -32,47 +32,82 @@ class EDLAuth {
                 ],
                 'operator' => [
                     'password' => '$2a$12$3Vqfxz27vp98UviY152seuMM/bd8X4FYqEBkVIKwudVQq7UtN17R.',
-                    'name' => 'Security Operator',
+                    'name' => 'EDL Operator',
                     'email' => 'operator@company.com',
                     'role' => 'operator',
                     'permissions' => ['submit', 'view']
+                ],
+                'viewer' => [
+                    'password' => '$2a$12$K5s4dGj6w6D9zQy0jLm3HeK.f9Y7zD3MKL4.5k8N2mR7vT8qA9cBu',
+                    'name' => 'EDL Viewer',
+                    'email' => 'viewer@company.com',
+                    'role' => 'viewer',
+                    'permissions' => ['view']
                 ]
             ];
             
-            if (function_exists('write_json_file')) {
-                write_json_file($this->users_file, $default_users);
-            } else {
-                file_put_contents($this->users_file, json_encode($default_users, JSON_PRETTY_PRINT));
-            }
+            $this->save_users($default_users);
         }
     }
     
     public function authenticate($username, $password) {
+        // IMPORTANT: Clear any leftover Okta session data when doing local auth
+        $this->clear_okta_session_data();
+        
         $users = $this->load_users();
         
-        if (isset($users[$username])) {
-            if (password_verify($password, $users[$username]['password'])) {
-                $_SESSION['authenticated'] = true;
-                $_SESSION['username'] = $username;
-                $_SESSION['name'] = $users[$username]['name'];
-                $_SESSION['email'] = $users[$username]['email'];
-                $_SESSION['role'] = $users[$username]['role'];
-                $_SESSION['permissions'] = $users[$username]['permissions'];
-                $_SESSION['login_time'] = time();
-                
-                return true;
-            }
+        if (!isset($users[$username])) {
+            return false;
         }
         
-        return false;
+        $user = $users[$username];
+        
+        if (!password_verify($password, $user['password'])) {
+            return false;
+        }
+        
+        // Set LOCAL authentication session
+        $_SESSION['authenticated'] = true;
+        $_SESSION['username'] = $username;
+        $_SESSION['name'] = $user['name'] ?? $username;
+        $_SESSION['email'] = $user['email'] ?? '';
+        $_SESSION['role'] = $user['role'] ?? 'viewer';
+        $_SESSION['permissions'] = $user['permissions'] ?? ['view'];
+        $_SESSION['login_time'] = time();
+        $_SESSION['login_method'] = 'local'; // Mark as local login
+        
+        // Explicitly clear Okta flags to prevent conflicts
+        unset($_SESSION['okta_authenticated']);
+        unset($_SESSION['okta_sub']);
+        unset($_SESSION['okta_iss']);
+        unset($_SESSION['groups']);
+        
+        return true;
     }
     
-    public function logout() {
-        session_destroy();
+    /**
+     * Clear any leftover Okta session data that might interfere with local auth
+     */
+    private function clear_okta_session_data() {
+        $okta_keys = [
+            'okta_authenticated',
+            'oauth_state', 
+            'oauth_code_verifier',
+            'okta_sub',
+            'okta_iss',
+            'groups'
+        ];
+        
+        foreach ($okta_keys as $key) {
+            if (isset($_SESSION[$key])) {
+                unset($_SESSION[$key]);
+            }
+        }
     }
     
     public function check_session() {
-        if (!$this->is_authenticated()) {
+        // Only check the main authenticated flag for local auth
+        if (!isset($_SESSION['authenticated']) || $_SESSION['authenticated'] !== true) {
             return false;
         }
         
@@ -86,48 +121,79 @@ class EDLAuth {
         return true;
     }
     
-    public function is_authenticated() {
-        return isset($_SESSION['authenticated']) && $_SESSION['authenticated'] === true;
+    public function require_auth() {
+        if (!$this->check_session()) {
+            $this->redirect_to_login();
+        }
+    }
+    
+    public function require_permission($permission) {
+        if (!$this->check_session()) {
+            $this->redirect_to_login();
+        }
+        
+        if (!$this->has_permission($permission)) {
+            http_response_code(403);
+            die('Access denied. Required permission: ' . $permission);
+        }
     }
     
     public function has_permission($permission) {
-        if (!$this->is_authenticated()) return false;
-        return in_array($permission, $_SESSION['permissions'] ?? []);
+        if (!$this->check_session()) {
+            return false;
+        }
+        
+        $permissions = $_SESSION['permissions'] ?? [];
+        return in_array($permission, $permissions);
     }
     
-    public function require_auth() {
+    public function get_user_info() {
         if (!$this->check_session()) {
-            // Get the correct base path for redirects - FIXED to always point to login.php in root
+            return null;
+        }
+        
+        return [
+            'username' => $_SESSION['username'] ?? '',
+            'name' => $_SESSION['name'] ?? '',
+            'email' => $_SESSION['email'] ?? '',
+            'role' => $_SESSION['role'] ?? 'viewer',
+            'permissions' => $_SESSION['permissions'] ?? [],
+            'login_method' => $_SESSION['login_method'] ?? 'unknown'
+        ];
+    }
+    
+    public function logout() {
+        // Clear all session data
+        session_destroy();
+        session_start(); // Start fresh session for flash messages
+        
+        if (function_exists('show_flash')) {
+            show_flash('You have been logged out successfully.', 'info');
+        }
+        
+        $this->redirect_to_login();
+    }
+    
+    private function redirect_to_login() {
+        if (!headers_sent()) {
             $base_path = $this->get_app_root_path();
             header('Location: ' . $base_path . 'login.php');
             exit;
         }
     }
     
-    public function require_permission($permission) {
-        $this->require_auth();
-        if (!$this->has_permission($permission)) {
-            if (function_exists('show_flash')) {
-                show_flash('Insufficient permissions', 'danger');
-            }
-            $base_path = $this->get_app_root_path();
-            header('Location: ' . $base_path . 'index.php');
-            exit;
-        }
-    }
-    
     private function get_app_root_path() {
-        // FIXED: Always return the application root path, regardless of current page location
         $script_name = $_SERVER['SCRIPT_NAME'] ?? '';
         
-        // Extract the application root by finding the EDL-Manager2.0 directory
+        // Extract the application root by finding common subdirectories
         if (strpos($script_name, '/') !== false) {
             $path_parts = explode('/', trim($script_name, '/'));
             
-            // Find the application root (could be EDL-Manager2.0 or just root)
+            // Find the application root (stop at known subdirectories)
             $app_root_parts = [];
             foreach ($path_parts as $part) {
-                if ($part === 'pages' || $part === 'api' || $part === 'okta' || pathinfo($part, PATHINFO_EXTENSION) === 'php') {
+                if ($part === 'pages' || $part === 'api' || $part === 'okta' || 
+                    $part === 'includes' || pathinfo($part, PATHINFO_EXTENSION) === 'php') {
                     // Stop when we hit a subdirectory or PHP file
                     break;
                 }
@@ -143,11 +209,6 @@ class EDLAuth {
         return '/';
     }
     
-    // Keep the old method for backward compatibility but fix it too
-    private function get_base_path() {
-        return $this->get_app_root_path();
-    }
-    
     private function load_users() {
         if (function_exists('read_json_file')) {
             return read_json_file($this->users_file);
@@ -157,6 +218,18 @@ class EDLAuth {
                 return $content ? json_decode($content, true) : [];
             }
             return [];
+        }
+    }
+    
+    private function save_users($users) {
+        if (function_exists('write_json_file')) {
+            return write_json_file($this->users_file, $users);
+        } else {
+            $dir = dirname($this->users_file);
+            if (!is_dir($dir)) {
+                mkdir($dir, 0755, true);
+            }
+            return file_put_contents($this->users_file, json_encode($users, JSON_PRETTY_PRINT));
         }
     }
 }
@@ -177,7 +250,6 @@ if (!function_exists('has_permission')) {
 
 if (!function_exists('get_app_base_path')) {
     function get_app_base_path() {
-        // FIXED: Get the application root path correctly
         $script_name = $_SERVER['SCRIPT_NAME'] ?? '';
         
         if (strpos($script_name, '/') !== false) {
@@ -186,14 +258,13 @@ if (!function_exists('get_app_base_path')) {
             // Find the application root
             $app_root_parts = [];
             foreach ($path_parts as $part) {
-                if ($part === 'pages' || $part === 'api' || $part === 'okta' || pathinfo($part, PATHINFO_EXTENSION) === 'php') {
-                    // Stop when we hit a subdirectory or PHP file
+                if ($part === 'pages' || $part === 'api' || $part === 'okta' || 
+                    $part === 'includes' || pathinfo($part, PATHINFO_EXTENSION) === 'php') {
                     break;
                 }
                 $app_root_parts[] = $part;
             }
             
-            // Build the application root path
             if (!empty($app_root_parts)) {
                 return '/' . implode('/', $app_root_parts) . '/';
             }
