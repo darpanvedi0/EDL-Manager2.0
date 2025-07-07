@@ -1,4 +1,15 @@
 <?php
+// Temporary debug - add this at the very top of index.php
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
+// Check for Okta callback parameters and redirect if found
+if (isset($_GET['code']) || isset($_GET['state']) || isset($_GET['error'])) {
+    // These are Okta callback parameters - redirect to clean URL
+    $clean_url = strtok($_SERVER["REQUEST_URI"], '?');
+    header("Location: " . $clean_url);
+    exit;
+}
 // Load required files in correct order
 require_once 'config/config.php';
 require_once 'includes/functions.php';
