@@ -61,7 +61,7 @@ class OktaAuthOrg {
         $params = [
             'client_id' => $client_id,
             'response_type' => 'code',
-            'scope' => 'openid profile email',
+            'scope' => 'openid profile email groups',
             'redirect_uri' => $redirect_uri,
             'state' => $state,
             'code_challenge' => $code_challenge,
@@ -258,9 +258,28 @@ class OktaAuthOrg {
         unset($_SESSION['permissions']);
         unset($_SESSION['login_method']);
         
+        // DEBUG: Log all user data to see what Okta is sending
+        error_log("DEBUG: Complete Okta user data: " . json_encode($user_data));
+        
         $email = $user_data['email'] ?? '';
         $name = $user_data['name'] ?? $user_data['given_name'] . ' ' . $user_data['family_name'] ?? $email;
-        $groups = $user_data['groups'] ?? [];
+        
+        // Try multiple possible group claim names
+        $groups = [];
+        $possible_group_claims = ['groups', 'Groups', 'memberOf', 'group_memberships', 'user_groups'];
+        
+        foreach ($possible_group_claims as $claim) {
+            if (isset($user_data[$claim]) && is_array($user_data[$claim])) {
+                $groups = $user_data[$claim];
+                error_log("DEBUG: Found groups under claim '{$claim}': " . json_encode($groups));
+                break;
+            }
+        }
+        
+        // If no groups found, log this for debugging
+        if (empty($groups)) {
+            error_log("DEBUG: No groups found in user data. Available claims: " . implode(', ', array_keys($user_data)));
+        }
         
         if (empty($email)) {
             throw new Exception('No email found in user data');
@@ -269,6 +288,11 @@ class OktaAuthOrg {
         // Determine role based on groups
         $role = $this->map_groups_to_role($groups);
         $permissions = $this->get_role_permissions($role);
+        
+        // DEBUG: Log role assignment details
+        error_log("DEBUG: Role assignment - Groups found: " . json_encode($groups));
+        error_log("DEBUG: Role assignment - Mapped to role: {$role}");
+        error_log("DEBUG: Role assignment - Permissions: " . json_encode($permissions));
         
         // Set session variables
         $_SESSION['authenticated'] = true;
@@ -292,8 +316,14 @@ class OktaAuthOrg {
     }
     
     private function map_groups_to_role($groups) {
-        $role_mappings = $this->config['role_mappings'] ?? [];
+        // Check both possible config keys for compatibility
+        $role_mappings = $this->config['group_mappings'] ?? $this->config['role_mappings'] ?? [];
         $default_role = $this->config['default_role'] ?? 'viewer';
+        
+        // DEBUG: Log the mapping process
+        error_log("DEBUG: map_groups_to_role - Input groups: " . json_encode($groups));
+        error_log("DEBUG: map_groups_to_role - Group mappings config: " . json_encode($role_mappings));
+        error_log("DEBUG: map_groups_to_role - Default role: {$default_role}");
         
         // Role hierarchy (higher privilege first)
         $role_hierarchy = [
@@ -306,12 +336,16 @@ class OktaAuthOrg {
         // Check each role in hierarchy order
         foreach ($role_hierarchy as $role => $role_name) {
             $mapped_group = $role_mappings[$role . '_group'] ?? '';
+            error_log("DEBUG: Checking role '{$role}' - looking for config key: '{$role}_group' - mapped group: '{$mapped_group}'");
+            
             if (!empty($mapped_group) && in_array($mapped_group, $groups)) {
+                error_log("DEBUG: MATCH FOUND! Role '{$role}' matches group '{$mapped_group}'");
                 return $role_hierarchy[$role];
             }
         }
         
         // Default role if no group matches
+        error_log("DEBUG: No group matches found, using default role: {$default_role}");
         return $role_hierarchy[$default_role] ?? $role_hierarchy['viewer'];
     }
     
