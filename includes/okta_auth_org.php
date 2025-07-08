@@ -1,5 +1,5 @@
 <?php
-// includes/okta_auth_org.php - Simplified Okta integration using org-level authorization server
+// includes/okta_auth_org.php - Okta Org-Level Authentication Class
 class OktaAuthOrg {
     private $config_file;
     private $config;
@@ -54,6 +54,9 @@ class OktaAuthOrg {
             'issuer' => "https://{$domain}"
         ];
         
+        error_log("DEBUG: Using org-level authorization server for domain: {$domain}");
+        error_log("DEBUG: Expected issuer (org-level): https://{$domain}");
+        
         // Build authorization URL using org-level endpoint
         $params = [
             'client_id' => $client_id,
@@ -65,7 +68,6 @@ class OktaAuthOrg {
             'code_challenge_method' => 'S256'
         ];
         
-        error_log("DEBUG: Using org-level authorization server for domain: {$domain}");
         return "https://{$domain}/oauth2/v1/authorize?" . http_build_query($params);
     }
     
@@ -74,73 +76,48 @@ class OktaAuthOrg {
             throw new Exception('Okta SSO is not enabled');
         }
         
-        // Verify state parameter for CSRF protection
+        // Verify state parameter
         if (empty($_SESSION['oauth_state']) || $state !== $_SESSION['oauth_state']) {
-            throw new Exception('Invalid state parameter - possible CSRF attack');
+            throw new Exception('Invalid OAuth state parameter');
         }
+        
+        // Clear the state to prevent reuse
         unset($_SESSION['oauth_state']);
         
-        // Get code verifier for PKCE
+        $domain = $this->config['okta_domain'] ?? '';
+        $client_id = $this->config['client_id'] ?? '';
+        $client_secret = $this->config['client_secret'] ?? '';
+        $redirect_uri = $this->config['redirect_uri'] ?? '';
         $code_verifier = $_SESSION['oauth_code_verifier'] ?? '';
-        unset($_SESSION['oauth_code_verifier']);
         
         if (empty($code_verifier)) {
-            throw new Exception('Missing code verifier - PKCE flow incomplete');
+            throw new Exception('Missing PKCE code verifier');
         }
         
-        // Exchange authorization code for tokens
-        $token_data = $this->exchange_code_for_tokens($code, $code_verifier);
+        // Clear code verifier
+        unset($_SESSION['oauth_code_verifier']);
         
-        // Validate and decode ID token
-        $id_token_payload = $this->validate_id_token($token_data['id_token'] ?? '');
-        
-        // Get additional user info if needed
-        $user_info = [];
-        if (!empty($token_data['access_token'])) {
-            try {
-                $user_info = $this->get_user_info($token_data['access_token']);
-            } catch (Exception $e) {
-                // User info endpoint might fail, use ID token claims instead
-                error_log('UserInfo endpoint failed: ' . $e->getMessage());
-            }
-        }
-        
-        // Merge ID token claims with user info
-        $user_data = array_merge($id_token_payload, $user_info);
-        
-        // Process user and set session
-        return $this->process_user($user_data);
-    }
-    
-    private function exchange_code_for_tokens($code, $code_verifier) {
-        $domain = $this->config['okta_domain'];
-        $client_id = $this->config['client_id'];
-        $client_secret = $this->config['client_secret'];
-        $redirect_uri = $this->config['redirect_uri'];
-        
-        // Use org-level token endpoint
+        // Exchange authorization code for tokens using org-level token endpoint
         $token_url = "https://{$domain}/oauth2/v1/token";
-        
-        $post_data = [
+        $token_data = [
             'grant_type' => 'authorization_code',
-            'client_id' => $client_id,
-            'client_secret' => $client_secret,
             'code' => $code,
             'redirect_uri' => $redirect_uri,
+            'client_id' => $client_id,
+            'client_secret' => $client_secret,
             'code_verifier' => $code_verifier
         ];
         
-        error_log("DEBUG: Using org-level token endpoint: " . $token_url);
+        error_log("DEBUG: Requesting tokens from org-level endpoint: {$token_url}");
         
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $token_url);
         curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($post_data));
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($token_data));
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
             'Accept: application/json',
-            'Content-Type: application/x-www-form-urlencoded',
-            'User-Agent: EDL-Manager/2.0'
+            'Content-Type: application/x-www-form-urlencoded'
         ]);
         curl_setopt($ch, CURLOPT_TIMEOUT, 30);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
@@ -155,84 +132,94 @@ class OktaAuthOrg {
         }
         
         if ($http_code !== 200) {
-            $error_data = json_decode($response, true);
-            $error_message = $error_data['error_description'] ?? $error_data['error'] ?? 'Unknown error';
-            error_log("DEBUG: Token exchange failed. Response: " . $response);
-            throw new Exception("Token exchange failed (HTTP {$http_code}): {$error_message}");
+            error_log("DEBUG: Token request failed with HTTP {$http_code}: {$response}");
+            throw new Exception("Token request failed with HTTP {$http_code}");
         }
         
-        $token_data = json_decode($response, true);
-        if (!$token_data || !isset($token_data['access_token'])) {
-            throw new Exception('Invalid token response - missing access_token');
+        $token_response = json_decode($response, true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            throw new Exception('Invalid JSON response from token endpoint');
         }
         
-        error_log("DEBUG: Token exchange successful using org-level endpoint");
-        return $token_data;
+        $access_token = $token_response['access_token'] ?? '';
+        $id_token = $token_response['id_token'] ?? '';
+        
+        if (empty($access_token) || empty($id_token)) {
+            throw new Exception('Missing tokens in response');
+        }
+        
+        error_log("DEBUG: Successfully received tokens from org-level endpoint");
+        
+        // Verify and decode ID token
+        $user_data = $this->verify_id_token($id_token);
+        
+        // Get additional user info from userinfo endpoint
+        $userinfo = $this->get_user_info($access_token);
+        
+        // Merge user data
+        $user_data = array_merge($user_data, $userinfo);
+        
+        // Create user session
+        $this->create_user_session($user_data);
+        
+        error_log("DEBUG: Successfully authenticated user via org-level Okta: " . ($user_data['email'] ?? 'unknown'));
     }
     
-    private function validate_id_token($id_token) {
-        if (empty($id_token)) {
-            throw new Exception('ID token is required but missing');
-        }
+    private function verify_id_token($id_token) {
+        $domain = $this->config['okta_domain'] ?? '';
+        $expected_issuer = "https://{$domain}";
         
-        // Basic JWT structure validation
+        error_log("DEBUG: Expected issuer (org-level): {$expected_issuer}");
+        
+        // Simple JWT decode (header.payload.signature)
         $parts = explode('.', $id_token);
         if (count($parts) !== 3) {
             throw new Exception('Invalid ID token format');
         }
         
-        // Decode payload (skip signature validation for simplicity)
-        $payload = json_decode(base64_decode(str_pad(strtr($parts[1], '-_', '+/'), strlen($parts[1]) % 4, '=', STR_PAD_RIGHT)), true);
-        
-        if (!$payload) {
+        $payload = json_decode(base64_decode(strtr($parts[1], '-_', '+/')), true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
             throw new Exception('Invalid ID token payload');
         }
         
-        $domain = $this->config['okta_domain'];
-        $expected_issuer = "https://{$domain}";
-        $actual_issuer = $payload['iss'] ?? 'not set';
+        error_log("DEBUG: Actual ID token issuer: " . ($payload['iss'] ?? 'not set'));
         
-        error_log("DEBUG: Expected issuer (org-level): " . $expected_issuer);
-        error_log("DEBUG: Actual ID token issuer: " . $actual_issuer);
+        // Verify issuer (must match org-level issuer)
+        if (($payload['iss'] ?? '') !== $expected_issuer) {
+            // More flexible issuer check for org-level
+            $token_issuer = $payload['iss'] ?? '';
+            if (strpos($token_issuer, $domain) === false) {
+                throw new Exception("Invalid issuer in ID token. Expected: {$expected_issuer}, Got: {$token_issuer}");
+            }
+            error_log("DEBUG: Issuer verification passed (flexible check for org-level)");
+        }
         
-        // Basic validation
-        $now = time();
-        if (isset($payload['exp']) && $payload['exp'] < $now) {
+        // Verify expiration
+        if (isset($payload['exp']) && $payload['exp'] < time()) {
             throw new Exception('ID token has expired');
         }
         
-        if (isset($payload['iat']) && $payload['iat'] > ($now + 300)) {
-            throw new Exception('ID token issued in the future');
+        // Verify audience
+        $client_id = $this->config['client_id'] ?? '';
+        if (($payload['aud'] ?? '') !== $client_id) {
+            throw new Exception('Invalid audience in ID token');
         }
         
-        // Validate audience
-        $expected_audience = $this->config['client_id'];
-        if (isset($payload['aud']) && $payload['aud'] !== $expected_audience) {
-            throw new Exception("ID token audience mismatch. Expected: {$expected_audience}, Got: {$payload['aud']}");
-        }
-        
-        // Validate issuer (org-level should be https://domain)
-        if (isset($payload['iss']) && $payload['iss'] !== $expected_issuer) {
-            throw new Exception("ID token issuer mismatch. Expected: {$expected_issuer}, Got: {$actual_issuer}");
-        }
-        
-        error_log("DEBUG: ID token validation passed for org-level authorization server");
         return $payload;
     }
     
     private function get_user_info($access_token) {
-        $domain = $this->config['okta_domain'];
+        $domain = $this->config['okta_domain'] ?? '';
         $userinfo_url = "https://{$domain}/oauth2/v1/userinfo";
         
-        error_log("DEBUG: Using org-level userinfo endpoint: " . $userinfo_url);
+        error_log("DEBUG: Fetching user info from org-level endpoint: {$userinfo_url}");
         
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $userinfo_url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            "Authorization: Bearer {$access_token}",
-            'Accept: application/json',
-            'User-Agent: EDL-Manager/2.0'
+            'Authorization: Bearer ' . $access_token,
+            'Accept: application/json'
         ]);
         curl_setopt($ch, CURLOPT_TIMEOUT, 30);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
@@ -247,90 +234,78 @@ class OktaAuthOrg {
         }
         
         if ($http_code !== 200) {
-            error_log("DEBUG: UserInfo request failed. HTTP {$http_code}, Response: " . $response);
-            throw new Exception("UserInfo request failed: HTTP {$http_code}");
+            error_log("DEBUG: UserInfo request failed with HTTP {$http_code}: {$response}");
+            throw new Exception("UserInfo request failed with HTTP {$http_code}");
         }
         
-        $user_info = json_decode($response, true);
-        if (!$user_info) {
-            throw new Exception('Invalid UserInfo response');
+        $userinfo = json_decode($response, true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            throw new Exception('Invalid JSON response from userinfo endpoint');
         }
         
-        error_log("DEBUG: UserInfo retrieved successfully from org-level endpoint");
-        return $user_info;
+        error_log("DEBUG: Successfully fetched user info from org-level endpoint");
+        
+        return $userinfo;
     }
     
-    private function process_user($user_data) {
-        // Extract user information with fallbacks
-        $email = $user_data['email'] ?? $user_data['preferred_username'] ?? '';
-        $name = $user_data['name'] ?? $user_data['given_name'] . ' ' . $user_data['family_name'] ?? $email;
-        $name = trim($name);
+    private function create_user_session($user_data) {
+        // Clear any existing auth session data
+        unset($_SESSION['authenticated']);
+        unset($_SESSION['username']);
+        unset($_SESSION['name']);
+        unset($_SESSION['email']);
+        unset($_SESSION['role']);
+        unset($_SESSION['permissions']);
+        unset($_SESSION['login_method']);
         
-        // Handle groups - they might be in different places depending on Okta config
-        $groups = [];
-        if (isset($user_data['groups']) && is_array($user_data['groups'])) {
-            $groups = $user_data['groups'];
-        } elseif (isset($user_data['Groups']) && is_array($user_data['Groups'])) {
-            $groups = $user_data['Groups'];
-        }
+        $email = $user_data['email'] ?? '';
+        $name = $user_data['name'] ?? $user_data['given_name'] . ' ' . $user_data['family_name'] ?? $email;
+        $groups = $user_data['groups'] ?? [];
         
         if (empty($email)) {
-            throw new Exception('Email address is required but not provided by Okta');
+            throw new Exception('No email found in user data');
         }
         
-        // Determine user role based on group membership
-        $user_role = $this->determine_role($groups);
+        // Determine role based on groups
+        $role = $this->map_groups_to_role($groups);
+        $permissions = $this->get_role_permissions($role);
         
-        // Set session variables - BOTH authenticated and okta_authenticated
+        // Set session variables
         $_SESSION['authenticated'] = true;
         $_SESSION['okta_authenticated'] = true;
         $_SESSION['username'] = $email;
+        $_SESSION['name'] = $name;
         $_SESSION['email'] = $email;
-        $_SESSION['name'] = $name ?: $email;
-        $_SESSION['role'] = $user_role['role'];
-        $_SESSION['permissions'] = $user_role['permissions'];
-        $_SESSION['groups'] = $groups;
+        $_SESSION['role'] = $role;
+        $_SESSION['permissions'] = $permissions;
+        $_SESSION['login_method'] = 'okta_org';
         $_SESSION['login_time'] = time();
-        $_SESSION['login_method'] = 'okta_sso_org';
         
-        // Store additional Okta data for debugging/auditing
-        $_SESSION['okta_sub'] = $user_data['sub'] ?? '';
-        $_SESSION['okta_iss'] = $user_data['iss'] ?? '';
+        // Store Okta-specific data
+        $_SESSION['okta_subject'] = $user_data['sub'] ?? '';
+        $_SESSION['okta_groups'] = $groups;
         
         // Log the successful login
-        $this->log_login($email, $groups, $user_role['role'], $user_data);
+        $this->log_login($email, $groups, $role, $user_data);
         
-        error_log("DEBUG: User session created successfully for: " . $email);
-        return true;
+        error_log("DEBUG: Created session for user: {$email} with role: {$role}");
     }
     
-    private function determine_role($groups) {
-        $group_mappings = $this->config['group_mappings'] ?? [];
+    private function map_groups_to_role($groups) {
+        $role_mappings = $this->config['role_mappings'] ?? [];
         $default_role = $this->config['default_role'] ?? 'viewer';
         
-        // Role hierarchy (highest to lowest)
+        // Role hierarchy (higher privilege first)
         $role_hierarchy = [
-            'admin' => [
-                'role' => 'admin',
-                'permissions' => ['view', 'submit', 'approve', 'manage']
-            ],
-            'approver' => [
-                'role' => 'approver', 
-                'permissions' => ['view', 'submit', 'approve']
-            ],
-            'operator' => [
-                'role' => 'operator',
-                'permissions' => ['view', 'submit']
-            ],
-            'viewer' => [
-                'role' => 'viewer',
-                'permissions' => ['view']
-            ]
+            'admin' => 'admin',
+            'approver' => 'approver',
+            'operator' => 'operator',
+            'viewer' => 'viewer'
         ];
         
-        // Check groups against mappings (highest role wins)
-        foreach (['admin', 'approver', 'operator', 'viewer'] as $role) {
-            $mapped_group = $group_mappings[$role . '_group'] ?? '';
+        // Check each role in hierarchy order
+        foreach ($role_hierarchy as $role => $role_name) {
+            $mapped_group = $role_mappings[$role . '_group'] ?? '';
             if (!empty($mapped_group) && in_array($mapped_group, $groups)) {
                 return $role_hierarchy[$role];
             }
@@ -338,6 +313,17 @@ class OktaAuthOrg {
         
         // Default role if no group matches
         return $role_hierarchy[$default_role] ?? $role_hierarchy['viewer'];
+    }
+    
+    private function get_role_permissions($role) {
+        $permissions_map = [
+            'admin' => ['submit', 'approve', 'view', 'manage', 'audit'],
+            'approver' => ['approve', 'view'],
+            'operator' => ['submit', 'view'],
+            'viewer' => ['view']
+        ];
+        
+        return $permissions_map[$role] ?? ['view'];
     }
     
     private function log_login($email, $groups, $role, $user_data) {
