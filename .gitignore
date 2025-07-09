@@ -1,0 +1,46 @@
+# Sensitive configuration files
+config/okta_config.json
+config/teams_config.json
+data/users.json
+
+# Runtime data files
+data/*.json
+edl-files/*.txt
+
+# Logs
+*.log
+logs/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary files
+tmp/
+temp/
+cache/
+
+# Web server specific
+.htaccess
+*.htpasswd
+
+# SSL certificates
+*.pem
+*.crt
+*.key
+*.csr
+
+# Backups
+backups/
+*.backup
+*.bak
+
+# Dependencies (if added later)
+vendor/
+node_modules/
