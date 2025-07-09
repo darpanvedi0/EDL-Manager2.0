@@ -14,6 +14,7 @@ $auth->require_permission('submit');
 
 $page_title = 'Submit Request';
 $error_message = '';
+$success_message = '';
 
 // Enhanced ServiceNow ticket validation function
 function validate_servicenow_ticket_enhanced($ticket) {
@@ -29,26 +30,94 @@ function validate_servicenow_ticket_enhanced($ticket) {
     return ['valid' => true, 'type' => 'ServiceNow Ticket'];
 }
 
+// Function to parse bulk entries from uploaded file or text
+function parse_bulk_entries($content) {
+    $entries = [];
+    $lines = explode("\n", $content);
+    
+    foreach ($lines as $line_num => $line) {
+        $line = trim($line);
+        
+        // Skip empty lines and comments
+        if (empty($line) || str_starts_with($line, '#') || str_starts_with($line, '//')) {
+            continue;
+        }
+        
+        // Auto-detect type
+        if (preg_match('/^https?:\/\//', $line)) {
+            $type = 'url';
+        } elseif (filter_var($line, FILTER_VALIDATE_IP)) {
+            $type = 'ip';
+        } elseif (preg_match('/^[a-zA-Z0-9][a-zA-Z0-9\.-]*\.[a-zA-Z]{2,}$/', $line)) {
+            $type = 'domain';
+        } else {
+            $type = 'unknown';
+        }
+        
+        $entries[] = [
+            'entry' => $line,
+            'type' => $type,
+            'line_number' => $line_num + 1
+        ];
+    }
+    
+    return $entries;
+}
+
+// Function to process entry existence check results from validation.php
+function process_entry_check($entry, $type) {
+    $check_result = check_entry_exists($entry, $type);
+    
+    if (!$check_result['exists']) {
+        return ['exists' => false];
+    }
+    
+    $location = $check_result['location'];
+    
+    if ($location === 'denied') {
+        return [
+            'exists' => true,
+            'status' => 'denied',
+            'details' => [
+                'reason' => $check_result['denied_reason'] ?? 'No reason provided'
+            ]
+        ];
+    } elseif ($location === 'approved') {
+        return [
+            'exists' => true,
+            'status' => 'approved',
+            'details' => []
+        ];
+    } elseif ($location === 'pending') {
+        return [
+            'exists' => true,
+            'status' => 'pending',
+            'details' => []
+        ];
+    }
+    
+    return ['exists' => false];
+}
+
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!validate_csrf_token($_POST['csrf_token'] ?? '')) {
         $error_message = 'Invalid security token. Please try again.';
     } else {
-        $entry = sanitize_input($_POST['entry'] ?? '');
-        $type = sanitize_input($_POST['type'] ?? '');
-        $comment = sanitize_input($_POST['comment'] ?? '');
+        $submission_type = sanitize_input($_POST['submission_type'] ?? 'individual');
         $justification = sanitize_input($_POST['justification'] ?? '');
         $priority = sanitize_input($_POST['priority'] ?? 'medium');
         $servicenow_ticket = sanitize_input($_POST['servicenow_ticket'] ?? '');
+        $comment = sanitize_input($_POST['comment'] ?? '');
         
         $errors = [];
+        $entries_to_submit = [];
         
-        // Validate required fields
-        if (empty($entry)) $errors[] = 'Entry is required';
+        // Validate common required fields
         if (empty($justification)) $errors[] = 'Justification is required';
         if (empty($servicenow_ticket)) $errors[] = 'ServiceNow ticket is required';
         
-        // Validate ServiceNow ticket format using enhanced validation
+        // Validate ServiceNow ticket format
         if (!empty($servicenow_ticket)) {
             $snow_validation = validate_servicenow_ticket_enhanced($servicenow_ticket);
             if (!$snow_validation['valid']) {
@@ -56,129 +125,190 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
         
-        // Auto-detect type if not specified
-        if (empty($type) || $type === 'auto') {
-            if (preg_match('/^https?:\/\//', $entry)) {
-                $type = 'url';
-            } elseif (filter_var($entry, FILTER_VALIDATE_IP)) {
-                $type = 'ip';
-            } elseif (preg_match('/^[a-zA-Z0-9][a-zA-Z0-9\.-]*\.[a-zA-Z]{2,}$/', $entry)) {
-                $type = 'domain';
-            } else {
-                $errors[] = 'Could not determine entry type. Please select manually.';
-            }
-        }
-        
-        // Check if entry already exists
-        if (!empty($entry) && !empty($type)) {
-            $pending_requests = read_json_file(DATA_DIR . '/pending_requests.json');
-            $approved_entries = read_json_file(DATA_DIR . '/approved_entries.json');
-            $denied_entries = read_json_file(DATA_DIR . '/denied_entries.json');
+        if ($submission_type === 'individual') {
+            // Handle individual entry submission (existing logic)
+            $entry = sanitize_input($_POST['entry'] ?? '');
+            $type = sanitize_input($_POST['type'] ?? '');
             
-            // Check denied entries FIRST (highest priority)
-            foreach ($denied_entries as $den) {
-                if ($den['entry'] === $entry && $den['type'] === $type) {
-                    $denied_reason = htmlspecialchars($den['reason'] ?? 'No reason provided');
-                    $denied_by = htmlspecialchars($den['denied_by'] ?? 'Admin');
-                    $denied_date = isset($den['denied_at']) ? 
-                        date('M j, Y H:i', strtotime($den['denied_at'])) : 'Unknown';
-                    
-                    $errors[] = "⚠️ This entry was previously <strong>DENIED</strong> on {$denied_date} by {$denied_by}.<br>" .
-                               "<strong>Reason:</strong> {$denied_reason}<br>" .
-                               "Please contact your administrator if you believe this should be reconsidered.";
-                    break;
-                }
-            }
+            if (empty($entry)) $errors[] = 'Entry is required';
             
-            // Check pending requests
-            if (empty($errors)) {
-                foreach ($pending_requests as $pending) {
-                    if ($pending['entry'] === $entry && $pending['type'] === $type) {
-                        $pending_by = htmlspecialchars($pending['submitted_by'] ?? 'Unknown');
-                        $pending_date = isset($pending['submitted_at']) ? 
-                            date('M j, Y H:i', strtotime($pending['submitted_at'])) : 'Unknown';
-                        
-                        if ($pending['submitted_by'] === $_SESSION['username']) {
-                            $errors[] = "You already have a pending request for this entry (submitted on {$pending_date}).";
-                        } else {
-                            $errors[] = "This entry is already pending approval (submitted by {$pending_by} on {$pending_date}).";
-                        }
-                        break;
-                    }
-                }
-            }
-            
-            // Check approved entries - FIXED: Only check entries with 'active' status
-            if (empty($errors)) {
-                foreach ($approved_entries as $approved) {
-                    if ($approved['entry'] === $entry && 
-                        $approved['type'] === $type && 
-                        isset($approved['status']) && 
-                        $approved['status'] === 'active') {
-                        
-                        $approved_by = htmlspecialchars($approved['approved_by'] ?? 'Unknown');
-                        $approved_date = isset($approved['approved_at']) ? 
-                            date('M j, Y H:i', strtotime($approved['approved_at'])) : 'Unknown';
-                        
-                        $errors[] = "This entry is already approved and active on the EDL (approved by {$approved_by} on {$approved_date}).";
-                        break;
-                    }
-                }
-            }
-        }
-        
-        if (empty($errors)) {
-            $request = [
-                'id' => uniqid('req_', true),
-                'entry' => $entry,
-                'type' => $type,
-                'comment' => $comment,
-                'justification' => $justification,
-                'priority' => $priority,
-                'servicenow_ticket' => $servicenow_ticket,
-                'submitted_by' => $_SESSION['username'],
-                'submitted_at' => date('c'),
-                'status' => 'pending'
-            ];
-            
-            $requests = read_json_file(DATA_DIR . '/pending_requests.json');
-            $requests[] = $request;
-            
-            if (write_json_file(DATA_DIR . '/pending_requests.json', $requests)) {
-                // Add audit log
-                $logs = read_json_file(DATA_DIR . '/audit_logs.json');
-                $logs[] = [
-                    'id' => uniqid('audit_', true),
-                    'timestamp' => date('c'),
-                    'action' => 'submit',
-                    'entry' => $entry,
-                    'user' => $_SESSION['username'],
-                    'details' => "Submitted {$type} request (ServiceNow: {$servicenow_ticket})",
-                    'request_id' => $request['id'],
-                    'servicenow_ticket' => $servicenow_ticket
-                ];
-                write_json_file(DATA_DIR . '/audit_logs.json', $logs);
-                
-                // Send Teams notification for new request (if Teams integration exists)
-                $teams_notification_sent = false;
-                if (function_exists('notify_teams_new_request')) {
-                    try {
-                        $teams_notification_sent = notify_teams_new_request($request);
-                    } catch (Exception $e) {
-                        error_log('Teams notification failed: ' . $e->getMessage());
-                    }
-                }
-                
-                if ($teams_notification_sent) {
-                    show_flash('Request submitted successfully! Teams notification sent. You will be notified when it is reviewed.', 'success');
+            // Auto-detect type if not specified
+            if (empty($type) || $type === 'auto') {
+                if (preg_match('/^https?:\/\//', $entry)) {
+                    $type = 'url';
+                } elseif (filter_var($entry, FILTER_VALIDATE_IP)) {
+                    $type = 'ip';
+                } elseif (preg_match('/^[a-zA-Z0-9][a-zA-Z0-9\.-]*\.[a-zA-Z]{2,}$/', $entry)) {
+                    $type = 'domain';
                 } else {
-                    show_flash('Request submitted successfully! You will be notified when it is reviewed.', 'success');
+                    $errors[] = 'Could not determine entry type. Please select manually.';
+                }
+            }
+            
+            // Check if entry already exists
+            if (!empty($entry) && !empty($type)) {
+                $exists_check = process_entry_check($entry, $type);
+                if ($exists_check['exists']) {
+                    $details = $exists_check['details'] ?? [];
+                    if ($exists_check['status'] === 'denied') {
+                        $errors[] = "⚠️ This entry was previously DENIED. Reason: {$details['reason']}";
+                    } elseif ($exists_check['status'] === 'approved') {
+                        $errors[] = "This entry is already approved and active in the blocklist.";
+                    } elseif ($exists_check['status'] === 'pending') {
+                        $errors[] = "This entry is already pending approval.";
+                    }
+                }
+            }
+            
+            if (empty($errors) && !empty($entry)) {
+                $entries_to_submit[] = [
+                    'entry' => $entry,
+                    'type' => $type,
+                    'submitted_by' => $_SESSION['username']
+                ];
+            }
+            
+        } elseif ($submission_type === 'bulk') {
+            // Handle bulk submission
+            $bulk_content = '';
+            
+            if (isset($_FILES['bulk_file']) && $_FILES['bulk_file']['error'] === UPLOAD_ERR_OK) {
+                // Handle file upload
+                $file_info = $_FILES['bulk_file'];
+                $allowed_types = ['text/plain', 'text/csv', 'application/csv'];
+                $max_size = 5 * 1024 * 1024; // 5MB
+                
+                if ($file_info['size'] > $max_size) {
+                    $errors[] = 'File size too large. Maximum 5MB allowed.';
+                } elseif (!in_array($file_info['type'], $allowed_types)) {
+                    $errors[] = 'Invalid file type. Only .txt and .csv files are allowed.';
+                } else {
+                    $bulk_content = file_get_contents($file_info['tmp_name']);
+                }
+            } elseif (!empty($_POST['bulk_text'])) {
+                // Handle text area input
+                $bulk_content = sanitize_input($_POST['bulk_text']);
+            } else {
+                $errors[] = 'Please provide entries either via file upload or text input.';
+            }
+            
+            if (!empty($bulk_content) && empty($errors)) {
+                $parsed_entries = parse_bulk_entries($bulk_content);
+                
+                if (empty($parsed_entries)) {
+                    $errors[] = 'No valid entries found in the provided content.';
+                } else {
+                    $duplicate_count = 0;
+                    $invalid_count = 0;
+                    $denied_count = 0;
+                    
+                    foreach ($parsed_entries as $parsed_entry) {
+                        if ($parsed_entry['type'] === 'unknown') {
+                            $invalid_count++;
+                            continue;
+                        }
+                        
+                        $exists_check = process_entry_check($parsed_entry['entry'], $parsed_entry['type']);
+                        if ($exists_check['exists']) {
+                            if ($exists_check['status'] === 'denied') {
+                                $denied_count++;
+                            } else {
+                                $duplicate_count++;
+                            }
+                            continue;
+                        }
+                        
+                        $parsed_entry['submitted_by'] = $_SESSION['username'];
+                        $entries_to_submit[] = $parsed_entry;
+                    }
+                    
+                    // Show summary of skipped entries
+                    $summary_messages = [];
+                    if ($duplicate_count > 0) {
+                        $summary_messages[] = "{$duplicate_count} duplicate/existing entries skipped";
+                    }
+                    if ($invalid_count > 0) {
+                        $summary_messages[] = "{$invalid_count} invalid entries skipped";
+                    }
+                    if ($denied_count > 0) {
+                        $summary_messages[] = "{$denied_count} previously denied entries skipped";
+                    }
+                    
+                    if (!empty($summary_messages)) {
+                        $success_message = implode(', ', $summary_messages) . '. ';
+                    }
+                    
+                    if (empty($entries_to_submit)) {
+                        $errors[] = 'No new valid entries to submit after filtering duplicates and invalid entries.';
+                    }
+                }
+            }
+        }
+        
+        // Submit valid entries
+        if (empty($errors) && !empty($entries_to_submit)) {
+            $pending_requests = read_json_file(DATA_DIR . '/pending_requests.json');
+            $submitted_count = 0;
+            
+            foreach ($entries_to_submit as $entry_data) {
+                $request = [
+                    'id' => uniqid(),
+                    'entry' => $entry_data['entry'],
+                    'type' => $entry_data['type'],
+                    'justification' => $justification,
+                    'comment' => $comment,
+                    'priority' => $priority,
+                    'servicenow_ticket' => $servicenow_ticket,
+                    'submitted_by' => $_SESSION['username'],
+                    'submitted_at' => date('Y-m-d H:i:s'),
+                    'status' => 'pending',
+                    'submission_type' => $submission_type
+                ];
+                
+                $pending_requests[] = $request;
+                $submitted_count++;
+            }
+            
+            if (write_json_file(DATA_DIR . '/pending_requests.json', $pending_requests)) {
+                // Log audit entry
+                $audit_entry = [
+                    'timestamp' => date('Y-m-d H:i:s'),
+                    'user' => $_SESSION['username'],
+                    'action' => $submission_type === 'bulk' ? 'bulk_request_submitted' : 'request_submitted',
+                    'details' => $submission_type === 'bulk' ? 
+                        "Submitted {$submitted_count} entries in bulk" : 
+                        "Submitted entry: {$entries_to_submit[0]['entry']}",
+                    'ip' => $_SERVER['REMOTE_ADDR'] ?? 'Unknown'
+                ];
+                
+                $audit_logs = read_json_file(DATA_DIR . '/audit_logs.json');
+                $audit_logs[] = $audit_entry;
+                write_json_file(DATA_DIR . '/audit_logs.json', $audit_logs);
+                
+                // Send Teams notification if available
+                if (function_exists('send_teams_notification')) {
+                    if ($submission_type === 'bulk') {
+                        // Send bulk notification
+                        if (function_exists('notify_teams_bulk_submitted')) {
+                            notify_teams_bulk_submitted($entries_to_submit, $_SESSION['username']);
+                        }
+                    } else {
+                        // Send individual notification
+                        send_teams_notification('new_request', $entries_to_submit[0]);
+                    }
                 }
                 
+                if ($submission_type === 'bulk') {
+                    $success_message .= "Successfully submitted {$submitted_count} entries for review.";
+                } else {
+                    $success_message .= 'Request submitted successfully! You will be notified when reviewed.';
+                }
+                
+                show_flash($success_message, 'success');
                 header('Location: submit_request.php');
                 exit;
             } else {
-                $error_message = 'Failed to save request. Please try again.';
+                $error_message = 'Failed to save request(s). Please try again.';
             }
         } else {
             $error_message = implode('<br>', $errors);
@@ -207,13 +337,42 @@ require_once '../includes/header.php';
 </div>
 <?php endif; ?>
 
+<?php if ($success_message): ?>
+<div class="alert alert-success alert-dismissible fade show">
+    <i class="fas fa-check-circle"></i>
+    <?php echo $success_message; ?>
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+<?php endif; ?>
+
 <!-- Page Header -->
 <div class="page-header">
     <h1 class="mb-2">
         <i class="fas fa-plus me-2"></i>
         Submit EDL Request
     </h1>
-    <p class="mb-0 opacity-75">Submit a new entry for review and approval to the External Dynamic List</p>
+    <p class="mb-0 opacity-75">Submit individual entries or bulk upload for review and approval to the External Dynamic List</p>
+</div>
+
+<!-- Submission Type Toggle -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="btn-group w-100" role="group" aria-label="Submission Type">
+                    <input type="radio" class="btn-check" name="submission_type_radio" id="individual_radio" value="individual" checked>
+                    <label class="btn btn-outline-primary" for="individual_radio">
+                        <i class="fas fa-plus-circle me-1"></i> Individual Entry
+                    </label>
+                    
+                    <input type="radio" class="btn-check" name="submission_type_radio" id="bulk_radio" value="bulk">
+                    <label class="btn btn-outline-primary" for="bulk_radio">
+                        <i class="fas fa-upload me-1"></i> Bulk Upload
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- Form -->
@@ -226,46 +385,90 @@ require_once '../includes/header.php';
                 </h5>
             </div>
             <div class="card-body">
-                <form method="POST" class="needs-validation" novalidate>
+                <form method="POST" class="needs-validation" novalidate enctype="multipart/form-data">
                     <?php echo csrf_token_field(); ?>
                     
-                    <div class="row mb-3">
-                        <div class="col-md-8">
-                            <label for="entry" class="form-label fw-bold">Entry <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" id="entry" name="entry" 
-                                   value="<?php echo htmlspecialchars($_POST['entry'] ?? ''); ?>"
-                                   placeholder="e.g., 192.168.1.100, malicious.com, or https://bad-site.com"
-                                   required>
-                            <div class="form-text">Enter the IP address, domain, or URL to be blocked</div>
-                        </div>
-                        <div class="col-md-4">
-                            <label for="type" class="form-label fw-bold">Type</label>
-                            <select class="form-select" id="type" name="type">
-                                <option value="auto" <?php echo ($_POST['type'] ?? '') === 'auto' ? 'selected' : ''; ?>>Auto-detect</option>
-                                <option value="ip" <?php echo ($_POST['type'] ?? '') === 'ip' ? 'selected' : ''; ?>>IP Address</option>
-                                <option value="domain" <?php echo ($_POST['type'] ?? '') === 'domain' ? 'selected' : ''; ?>>Domain</option>
-                                <option value="url" <?php echo ($_POST['type'] ?? '') === 'url' ? 'selected' : ''; ?>>URL</option>
-                            </select>
-                            <div id="type-indicator" class="mt-1"></div>
+                    <!-- Hidden field to track submission type -->
+                    <input type="hidden" name="submission_type" id="submission_type" value="individual">
+                    
+                    <!-- Individual Entry Section -->
+                    <div id="individual_section">
+                        <div class="row mb-3">
+                            <div class="col-md-8">
+                                <label for="entry" class="form-label fw-bold">Entry <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="entry" name="entry" 
+                                       value="<?php echo htmlspecialchars($_POST['entry'] ?? ''); ?>"
+                                       placeholder="e.g., 192.168.1.100, malicious.com, or https://bad-site.com">
+                                <div class="form-text">Enter the IP address, domain, or URL to be blocked</div>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="type" class="form-label fw-bold">Type</label>
+                                <select class="form-select" id="type" name="type">
+                                    <option value="auto" <?php echo ($_POST['type'] ?? '') === 'auto' ? 'selected' : ''; ?>>Auto-detect</option>
+                                    <option value="ip" <?php echo ($_POST['type'] ?? '') === 'ip' ? 'selected' : ''; ?>>IP Address</option>
+                                    <option value="domain" <?php echo ($_POST['type'] ?? '') === 'domain' ? 'selected' : ''; ?>>Domain</option>
+                                    <option value="url" <?php echo ($_POST['type'] ?? '') === 'url' ? 'selected' : ''; ?>>URL</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
                     
+                    <!-- Bulk Upload Section -->
+                    <div id="bulk_section" style="display: none;">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Bulk Entry Method</label>
+                            <div class="btn-group w-100" role="group">
+                                <input type="radio" class="btn-check" name="bulk_method" id="file_upload" value="file" checked>
+                                <label class="btn btn-outline-secondary" for="file_upload">
+                                    <i class="fas fa-file-upload me-1"></i> File Upload
+                                </label>
+                                
+                                <input type="radio" class="btn-check" name="bulk_method" id="text_input" value="text">
+                                <label class="btn btn-outline-secondary" for="text_input">
+                                    <i class="fas fa-keyboard me-1"></i> Text Input
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- File Upload -->
+                        <div id="file_upload_section" class="mb-3">
+                            <label for="bulk_file" class="form-label fw-bold">Upload File</label>
+                            <input type="file" class="form-control" id="bulk_file" name="bulk_file" 
+                                   accept=".txt,.csv" aria-describedby="fileHelp">
+                            <div id="fileHelp" class="form-text">
+                                Upload a .txt or .csv file containing one entry per line. Maximum file size: 5MB
+                            </div>
+                        </div>
+                        
+                        <!-- Text Input -->
+                        <div id="text_input_section" class="mb-3" style="display: none;">
+                            <label for="bulk_text" class="form-label fw-bold">Bulk Entries</label>
+                            <textarea class="form-control" id="bulk_text" name="bulk_text" rows="10" 
+                                      placeholder="Enter one entry per line:&#10;192.168.1.100&#10;malicious.com&#10;https://bad-site.com/malware&#10;&#10;# Comments and empty lines will be ignored"><?php echo htmlspecialchars($_POST['bulk_text'] ?? ''); ?></textarea>
+                            <div class="form-text">Enter one entry per line. Comments starting with # will be ignored.</div>
+                        </div>
+                        
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-1"></i>
+                            <strong>Bulk Upload Notes:</strong>
+                            <ul class="mb-0 mt-2">
+                                <li>Each entry will be auto-detected as IP, domain, or URL</li>
+                                <li>Duplicate and invalid entries will be automatically skipped</li>
+                                <li>Comments (lines starting with #) and empty lines are ignored</li>
+                                <li>All entries will share the same justification and ServiceNow ticket</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <!-- Common Fields -->
                     <div class="row mb-3">
                         <div class="col-md-6">
                             <label for="priority" class="form-label fw-bold">Priority</label>
                             <select class="form-select" id="priority" name="priority">
-                                <option value="low" <?php echo ($_POST['priority'] ?? 'medium') === 'low' ? 'selected' : ''; ?>>
-                                    🔵 Low - Routine blocking
-                                </option>
-                                <option value="medium" <?php echo ($_POST['priority'] ?? 'medium') === 'medium' ? 'selected' : ''; ?>>
-                                    🟡 Medium - Standard security concern
-                                </option>
-                                <option value="high" <?php echo ($_POST['priority'] ?? 'medium') === 'high' ? 'selected' : ''; ?>>
-                                    🟠 High - Active threat
-                                </option>
-                                <option value="critical" <?php echo ($_POST['priority'] ?? 'medium') === 'critical' ? 'selected' : ''; ?>>
-                                    🔴 Critical - Immediate action required
-                                </option>
+                                <option value="low" <?php echo ($_POST['priority'] ?? 'medium') === 'low' ? 'selected' : ''; ?>>🔵 Low</option>
+                                <option value="medium" <?php echo ($_POST['priority'] ?? 'medium') === 'medium' ? 'selected' : ''; ?>>🟡 Medium</option>
+                                <option value="high" <?php echo ($_POST['priority'] ?? 'medium') === 'high' ? 'selected' : ''; ?>>🟠 High</option>
+                                <option value="critical" <?php echo ($_POST['priority'] ?? 'medium') === 'critical' ? 'selected' : ''; ?>>🔴 Critical</option>
                             </select>
                         </div>
                         <div class="col-md-6">
@@ -281,9 +484,9 @@ require_once '../includes/header.php';
                     <div class="mb-3">
                         <label for="justification" class="form-label fw-bold">Justification <span class="text-danger">*</span></label>
                         <textarea class="form-control" id="justification" name="justification" rows="3" 
-                                  placeholder="Explain why this entry should be blocked..."
+                                  placeholder="Explain why this entry/these entries should be blocked..."
                                   required><?php echo htmlspecialchars($_POST['justification'] ?? ''); ?></textarea>
-                        <div class="form-text">Provide a clear business justification for blocking this entry</div>
+                        <div class="form-text">Provide a clear business justification for blocking</div>
                     </div>
                     
                     <div class="mb-4">
@@ -300,7 +503,7 @@ require_once '../includes/header.php';
                         </div>
                         <div class="col-md-6 text-end">
                             <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-paper-plane"></i> Submit Request
+                                <i class="fas fa-paper-plane"></i> <span id="submit_button_text">Submit Request</span>
                             </button>
                         </div>
                     </div>
@@ -328,187 +531,122 @@ require_once '../includes/header.php';
                 <div class="mb-3">
                     <h6><i class="fas fa-globe text-success"></i> Domain:</h6>
                     <code class="small d-block">malicious.com</code>
-                    <code class="small d-block">evil.example.org</code>
+                    <code class="small d-block">*.suspicious.net</code>
+                    <code class="small d-block">bad-domain.org</code>
                 </div>
                 
                 <div class="mb-3">
-                    <h6><i class="fas fa-link text-info"></i> URL:</h6>
+                    <h6><i class="fas fa-link text-warning"></i> URL:</h6>
                     <code class="small d-block">https://bad-site.com/malware</code>
-                    <code class="small d-block">http://phishing.example.com</code>
-                </div>
-            </div>
-        </div>
-        
-        <!-- ServiceNow Ticket Guidelines -->
-        <div class="card mt-3">
-            <div class="card-header bg-light">
-                <h6 class="mb-0">
-                    <i class="fas fa-ticket-alt text-warning"></i> ServiceNow Ticket Guidelines
-                </h6>
-            </div>
-            <div class="card-body">
-                <div class="mb-3">
-                    <h6><i class="fas fa-exclamation-triangle text-danger"></i> Incident:</h6>
-                    <code class="small d-block">INC1234567</code>
-                    <small class="text-muted">For security incidents</small>
+                    <code class="small d-block">http://phishing.net/login</code>
                 </div>
                 
-                <div class="mb-3">
-                    <h6><i class="fas fa-shield-alt text-danger"></i> Security Incident:</h6>
-                    <code class="small d-block">SIR1234567</code>
-                    <small class="text-muted">For security incident response</small>
-                </div>
-                
-                <div class="mb-3">
-                    <h6><i class="fas fa-clipboard-list text-primary"></i> Request:</h6>
-                    <code class="small d-block">REQ1234567</code>
-                    <small class="text-muted">For service requests</small>
-                </div>
-                
-                <div class="mb-3">
-                    <h6><i class="fas fa-wrench text-info"></i> Change:</h6>
-                    <code class="small d-block">CHG1234567</code>
-                    <small class="text-muted">For change requests</small>
-                </div>
-                
-                <div class="mb-3">
-                    <h6><i class="fas fa-tasks text-secondary"></i> Other:</h6>
-                    <code class="small d-block">RITM1234567</code>
-                    <code class="small d-block">TASK1234567</code>
-                    <code class="small d-block">SCTASK1234567</code>
-                </div>
-                
-                <div class="alert alert-warning">
-                    <small>
-                        <i class="fas fa-info-circle"></i>
-                        <strong>Note:</strong> ServiceNow ticket is mandatory and will be included in all logs and notifications.
-                    </small>
+                <div class="alert alert-warning small">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Note:</strong> All entries are subject to approval. Duplicates and previously denied entries will be automatically filtered.
                 </div>
             </div>
         </div>
         
         <!-- Recent Requests -->
-        <div class="card mt-3">
+        <?php if (!empty($user_requests)): ?>
+        <div class="card mt-4">
             <div class="card-header bg-light">
                 <h6 class="mb-0">
-                    <i class="fas fa-history text-secondary"></i> Your Recent Requests
+                    <i class="fas fa-clock text-secondary"></i> Your Recent Requests
                 </h6>
             </div>
             <div class="card-body">
-                <?php if (empty($user_requests)): ?>
-                    <div class="text-center text-muted">
-                        <i class="fas fa-inbox fa-2x mb-2"></i><br>
-                        <small>No recent requests</small>
-                    </div>
-                <?php else: ?>
-                    <?php foreach ($user_requests as $request): ?>
-                        <div class="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
-                            <div>
-                                <code class="small"><?php echo htmlspecialchars($request['entry']); ?></code><br>
-                                <small class="text-muted">
-                                    <?php 
-                                    $time = strtotime($request['submitted_at']);
-                                    echo $time ? date('M j, H:i', $time) : 'Unknown';
-                                    ?>
-                                    <?php if (!empty($request['servicenow_ticket'])): ?>
-                                        <br><span class="badge bg-info"><?php echo htmlspecialchars($request['servicenow_ticket']); ?></span>
-                                    <?php endif; ?>
-                                </small>
-                            </div>
-                            <span class="badge <?php 
-                                echo $request['status'] === 'pending' ? 'bg-warning text-dark' : 
-                                     ($request['status'] === 'approved' ? 'bg-success' : 'bg-danger'); 
-                            ?>">
-                                <?php echo ucfirst($request['status']); ?>
-                            </span>
+                <?php foreach ($user_requests as $request): ?>
+                <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
+                    <div>
+                        <div class="fw-bold small">
+                            <?php echo htmlspecialchars($request['entry']); ?>
                         </div>
-                    <?php endforeach; ?>
-                <?php endif; ?>
+                        <small class="text-muted">
+                            <?php echo format_datetime($request['submitted_at'], 'M j, H:i'); ?>
+                        </small>
+                    </div>
+                    <span class="badge bg-warning">Pending</span>
+                </div>
+                <?php endforeach; ?>
+                
+                <div class="text-center mt-3">
+                    <a href="edl_viewer.php?filter=pending" class="btn btn-sm btn-outline-primary">
+                        View All Pending
+                    </a>
+                </div>
             </div>
         </div>
+        <?php endif; ?>
     </div>
 </div>
 
-</div>
-
 <script>
-// FIXED: Auto-detect entry type with proper reset to auto-detect when field is cleared
-document.getElementById('entry').addEventListener('input', function() {
-    const entry = this.value.trim();
-    const typeSelect = document.getElementById('type');
-    const indicator = document.getElementById('type-indicator');
+// Submission type toggle functionality
+document.addEventListener('DOMContentLoaded', function() {
+    const individualRadio = document.getElementById('individual_radio');
+    const bulkRadio = document.getElementById('bulk_radio');
+    const individualSection = document.getElementById('individual_section');
+    const bulkSection = document.getElementById('bulk_section');
+    const submissionTypeField = document.getElementById('submission_type');
+    const submitButtonText = document.getElementById('submit_button_text');
+    const entryField = document.getElementById('entry');
     
-    // If entry is empty, reset to auto-detect and clear indicator
-    if (!entry) {
-        typeSelect.value = 'auto';
-        indicator.innerHTML = '';
-        return;
-    }
+    // Bulk method toggle
+    const fileUploadRadio = document.getElementById('file_upload');
+    const textInputRadio = document.getElementById('text_input');
+    const fileUploadSection = document.getElementById('file_upload_section');
+    const textInputSection = document.getElementById('text_input_section');
     
-    // Only auto-detect if currently on auto-detect, or if user manually chose auto-detect
-    if (typeSelect.value === 'auto') {
-        let detectedType = 'unknown';
-        let icon = '';
-        
-        if (/^https?:\/\//.test(entry)) {
-            detectedType = 'url';
-            icon = 'fas fa-link';
-            typeSelect.value = 'url';
-        } else if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/.test(entry)) {
-            detectedType = 'ip';
-            icon = 'fas fa-network-wired';
-            typeSelect.value = 'ip';
-        } else if (/^[a-zA-Z0-9][a-zA-Z0-9\.-]*\.[a-zA-Z]{2,}$/.test(entry)) {
-            detectedType = 'domain';
-            icon = 'fas fa-globe';
-            typeSelect.value = 'domain';
-        }
-        
-        if (detectedType !== 'unknown') {
-            indicator.innerHTML = `<small class="text-success"><i class="${icon}"></i> Detected: ${detectedType}</small>`;
+    function toggleSubmissionType() {
+        if (bulkRadio.checked) {
+            individualSection.style.display = 'none';
+            bulkSection.style.display = 'block';
+            submissionTypeField.value = 'bulk';
+            submitButtonText.textContent = 'Submit Bulk Request';
+            if (entryField) entryField.removeAttribute('required');
         } else {
-            indicator.innerHTML = '<small class="text-muted">Could not auto-detect type</small>';
+            individualSection.style.display = 'block';
+            bulkSection.style.display = 'none';
+            submissionTypeField.value = 'individual';
+            submitButtonText.textContent = 'Submit Request';
+            if (entryField) entryField.setAttribute('required', 'required');
         }
     }
-});
-
-// Handle manual type selection changes
-document.getElementById('type').addEventListener('change', function() {
-    const entry = document.getElementById('entry').value.trim();
-    const indicator = document.getElementById('type-indicator');
     
-    // Clear indicator when manually changing type
-    if (this.value !== 'auto') {
-        indicator.innerHTML = '';
-    } else if (entry) {
-        // If switching back to auto-detect with content, trigger detection
-        document.getElementById('entry').dispatchEvent(new Event('input'));
+    function toggleBulkMethod() {
+        if (textInputRadio.checked) {
+            fileUploadSection.style.display = 'none';
+            textInputSection.style.display = 'block';
+        } else {
+            fileUploadSection.style.display = 'block';
+            textInputSection.style.display = 'none';
+        }
     }
+    
+    individualRadio.addEventListener('change', toggleSubmissionType);
+    bulkRadio.addEventListener('change', toggleSubmissionType);
+    fileUploadRadio.addEventListener('change', toggleBulkMethod);
+    textInputRadio.addEventListener('change', toggleBulkMethod);
+    
+    // Initialize state
+    toggleSubmissionType();
+    toggleBulkMethod();
 });
 
-// Validate ServiceNow ticket format (including SIR support)
-document.getElementById('servicenow_ticket').addEventListener('input', function() {
+// ServiceNow ticket validation
+document.getElementById('servicenow_ticket')?.addEventListener('input', function() {
     const ticket = this.value.trim().toUpperCase();
-    this.value = ticket;
+    const pattern = /^(INC|REQ|CHG|RITM|TASK|SCTASK|SIR)[0-9]{7}$/;
     
-    const patterns = [
-        /^INC\d{7}$/,
-        /^REQ\d{7}$/,
-        /^CHG\d{7}$/,
-        /^RITM\d{7}$/,
-        /^TASK\d{7}$/,
-        /^SCTASK\d{7}$/,
-        /^SIR\d{7}$/  // Added SIR support
-    ];
-    
-    const isValid = patterns.some(pattern => pattern.test(ticket));
-    
-    if (ticket && !isValid) {
+    if (ticket && !pattern.test(ticket)) {
         this.classList.add('is-invalid');
-        // Show helpful feedback
+        
+        // Create feedback element
         const feedback = document.createElement('div');
         feedback.className = 'invalid-feedback';
-        feedback.textContent = 'Format: INC1234567, REQ1234567, CHG1234567, SIR1234567, etc.';
+        feedback.textContent = 'Invalid format. Use: INC1234567, REQ1234567, CHG1234567, SIR1234567, etc.';
         
         // Remove existing feedback
         const existingFeedback = this.parentNode.querySelector('.invalid-feedback');
@@ -523,6 +661,22 @@ document.getElementById('servicenow_ticket').addEventListener('input', function(
         const existingFeedback = this.parentNode.querySelector('.invalid-feedback');
         if (existingFeedback) {
             existingFeedback.remove();
+        }
+    }
+});
+
+// Auto-detect entry type for individual entries
+document.getElementById('entry')?.addEventListener('input', function() {
+    const entry = this.value.trim();
+    const typeSelect = document.getElementById('type');
+    
+    if (entry && typeSelect.value === 'auto') {
+        if (/^https?:\/\//.test(entry)) {
+            typeSelect.value = 'url';
+        } else if (/^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(entry)) {
+            typeSelect.value = 'ip';
+        } else if (/^[a-zA-Z0-9][a-zA-Z0-9\.-]*\.[a-zA-Z]{2,}$/.test(entry)) {
+            typeSelect.value = 'domain';
         }
     }
 });
