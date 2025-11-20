@@ -3,6 +3,7 @@ require_once '../config/config.php';
 require_once '../includes/functions.php';
 require_once '../includes/auth.php';
 require_once '../includes/validation.php';
+require_once '../includes/virustotal.php';
 
 // Load Teams notifications if file exists (optional)
 if (file_exists('../includes/teams_notifications.php')) {
@@ -464,6 +465,13 @@ $pending_requests = array_filter($pending_requests, function($r) {
     return !isset($r['status']) || $r['status'] === 'pending';
 });
 
+// Pull VirusTotal context for each pending request (cached when available)
+$virustotal_summaries = [];
+foreach ($pending_requests as $request) {
+    $summary_key = $request['type'] . '|' . $request['entry'];
+    $virustotal_summaries[$summary_key] = get_virustotal_summary($request['entry'], $request['type']);
+}
+
 // Sort by priority and date
 usort($pending_requests, function($a, $b) {
     $priority_order = ['critical' => 4, 'high' => 3, 'medium' => 2, 'low' => 1];
@@ -561,6 +569,7 @@ require_once '../includes/header.php';
             <!-- Requests List -->
             <div class="row">
                 <?php foreach ($pending_requests as $request): ?>
+                <?php $vt_summary = $virustotal_summaries[$request['type'] . '|' . $request['entry']] ?? null; ?>
                 <div class="col-lg-6 mb-3">
                     <div class="card request-card priority-<?php echo $request['priority'] ?? 'medium'; ?>">
                         <div class="card-header d-flex justify-content-between align-items-center">
@@ -578,6 +587,22 @@ require_once '../includes/header.php';
                             </div>
                         </div>
                         <div class="card-body">
+                            <?php if ($vt_summary): ?>
+                            <div class="mb-3 d-flex align-items-center gap-2 flex-wrap">
+                                <span class="badge <?php echo htmlspecialchars($vt_summary['badge_class']); ?>">
+                                    <i class="fas fa-shield-virus"></i> <?php echo htmlspecialchars($vt_summary['label']); ?>
+                                </span>
+                                <?php if ($vt_summary['detections'] !== null): ?>
+                                    <span class="text-muted small">
+                                        Detections: <?php echo (int)$vt_summary['detections']; ?>
+                                        <?php if ($vt_summary['source'] === 'cache'): ?> (cached)<?php endif; ?>
+                                    </span>
+                                <?php else: ?>
+                                    <span class="text-muted small"><?php echo htmlspecialchars($vt_summary['message']); ?></span>
+                                <?php endif; ?>
+                            </div>
+                            <?php endif; ?>
+
                             <p class="card-text">
                                 <strong>Justification:</strong><br>
                                 <?php echo nl2br(htmlspecialchars($request['justification'])); ?>
@@ -627,6 +652,7 @@ require_once '../includes/header.php';
     <div class="card-body">
         <div class="row">
             <?php foreach ($pending_requests as $request): ?>
+            <?php $vt_summary = $virustotal_summaries[$request['type'] . '|' . $request['entry']] ?? null; ?>
             <div class="col-lg-6 mb-4">
                 <div class="card request-card priority-<?php echo $request['priority'] ?? 'medium'; ?>">
                     <div class="card-header d-flex justify-content-between align-items-center">
@@ -637,6 +663,22 @@ require_once '../includes/header.php';
                         </div>
                     </div>
                     <div class="card-body">
+                        <?php if ($vt_summary): ?>
+                        <div class="mb-3 d-flex align-items-center gap-2 flex-wrap">
+                            <span class="badge <?php echo htmlspecialchars($vt_summary['badge_class']); ?>">
+                                <i class="fas fa-shield-virus"></i> <?php echo htmlspecialchars($vt_summary['label']); ?>
+                            </span>
+                            <?php if ($vt_summary['detections'] !== null): ?>
+                                <span class="text-muted small">
+                                    Detections: <?php echo (int)$vt_summary['detections']; ?>
+                                    <?php if ($vt_summary['source'] === 'cache'): ?> (cached)<?php endif; ?>
+                                </span>
+                            <?php else: ?>
+                                <span class="text-muted small"><?php echo htmlspecialchars($vt_summary['message']); ?></span>
+                            <?php endif; ?>
+                        </div>
+                        <?php endif; ?>
+
                         <p class="card-text">
                             <strong>Justification:</strong><br>
                             <?php echo nl2br(htmlspecialchars($request['justification'])); ?>

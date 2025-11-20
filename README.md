@@ -27,6 +27,7 @@ EDL Manager provides a secure, enterprise-ready web interface for managing threa
 - **🔐 Okta SSO Integration**: Full OIDC/OAuth 2.0 support with group-based role mapping
 - **📱 Microsoft Teams Notifications**: Real-time webhook notifications for security events
 - **🎫 ServiceNow Integration**: Ticket validation and incident tracking
+- **🧭 VirusTotal Enrichment**: Inline risk scoring for IPs/Domains/URLs during approvals
 - **🛡️ SSL/TLS Configuration**: Built-in certificate management and security hardening
 - **⚡ High Availability**: Designed for enterprise-scale deployments
 
@@ -183,6 +184,21 @@ edl-manager/
    - Navigate to Admin → Teams Configuration
    - Enter webhook URL and select notification types
    - Test webhook functionality
+
+### 🧭 VirusTotal Intelligence
+
+1. **Configure API Key**
+   - Sign in as an **Admin** and go to **Admin → VirusTotal Configuration** to store the API key and cache duration (kept server-side under `data/virustotal_config.json`).
+   - You can still seed the API key via the `VIRUSTOTAL_API_KEY` environment variable; UI edits will overwrite the stored file for subsequent requests.
+
+2. **Detection-to-Risk Mapping**
+   - `0` detections → **Clean**
+   - `1-2` detections → **Low**
+   - `3-9` detections → **Medium**
+   - `10-24` detections → **High**
+   - `25+` detections → **Critical**
+
+VirusTotal lookups run automatically for each pending IP, domain, or URL and are cached (default 1 hour) to minimize API usage.
 
 ### 🛡️ SSL/TLS Configuration
 

@@ -47,7 +47,7 @@ function isActive($page_name, $current_page, $current_dir = '') {
 }
 
 // Admin pages for dropdown highlighting
-$admin_pages = ['okta_config.php', 'teams_config.php', 'ssl_config.php', 'audit_log.php'];
+$admin_pages = ['okta_config.php', 'teams_config.php', 'ssl_config.php', 'virustotal_config.php', 'audit_log.php'];
 $is_admin_page_active = in_array($current_page, $admin_pages);
 
 // Generate base64 encoded security shield favicon
@@ -549,6 +549,12 @@ $favicon_ico_base64 = 'data:image/svg+xml;base64,' . base64_encode($favicon_ico_
                                     <i class="fas fa-lock text-warning"></i>SSL/TLS Configuration
                                     <small class="text-muted d-block">Configure HTTPS encryption</small>
                                 </a></li>
+                                <?php if ($user_role === 'admin'): ?>
+                                <li><a class="dropdown-item <?php echo isActive('virustotal_config.php', $current_page); ?>" href="<?php echo $is_in_pages ? 'virustotal_config.php' : 'pages/virustotal_config.php'; ?>">
+                                    <i class="fas fa-shield-virus text-success"></i>VirusTotal Configuration
+                                    <small class="text-muted d-block">Manage API key and cache</small>
+                                </a></li>
+                                <?php endif; ?>
                                 
                                 <li><hr class="dropdown-divider"></li>
                                 
