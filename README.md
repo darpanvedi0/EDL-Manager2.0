@@ -29,6 +29,7 @@ EDL Manager provides a secure, enterprise-ready web interface for managing threa
 - **📱 Microsoft Teams Notifications**: Real-time webhook notifications for security events
 - **🎫 ServiceNow Integration**: Ticket validation and incident tracking
 - **🔌 REST API**: API-key access for SOAR platforms, SIEM playbooks, and scripts, with an OpenAPI 3.1 spec
+- **🧩 Cortex XSOAR**: A content pack to submit, approve, track, and remove entries from playbooks and the War Room
 - **🛡️ SSL/TLS Configuration**: Built-in certificate management and security hardening
 - **⚡ High Availability**: Designed for enterprise-scale deployments
 
@@ -279,6 +280,8 @@ edl-manager/
 │   └── 📁 v1/
 │       ├── index.php         # REST API router
 │       └── openapi.yaml      # REST API reference
+├── 📁 integrations/
+│   └── 📁 xsoar/             # Cortex XSOAR content pack (demisto/content layout) and its tests
 ├── 📁 tests/
 │   └── run.php               # Unit tests (php tests/run.php)
 ├── feed.php                 # Serves the lists to firewalls and records fetches
@@ -440,6 +443,10 @@ curl -X POST https://edl.example.com/api/v1/requests \
 Entries that are invalid, already blocked, already pending, or previously denied are skipped with a reason in the response; the rest wait for approval like any other request. URLs containing `&`, quotes, or angle brackets are rejected for now, because the web UI stores entries HTML-escaped.
 
 **Routing.** The Docker image routes `/api/v1/*` to the API. On other installs, either use `/api/v1/index.php/requests` style URLs, or add `FallbackResource /api/v1/index.php` inside a `<Directory .../api/v1>` block (Apache) or `location /api/v1/ { try_files $uri /api/v1/index.php$is_args$args; }` (nginx).
+
+### 🧩 Cortex XSOAR
+
+[`integrations/xsoar`](integrations/xsoar) holds a Cortex XSOAR content pack built on the REST API. Its commands submit indicators from an incident with the justification and ticket, poll until the request is approved or denied, approve, deny, or remove entries, and get impact metrics. It's laid out for contribution to the XSOAR Marketplace; see its README for setup, tests, and the contribution steps.
 
 ## 📈 Impact Metrics
 

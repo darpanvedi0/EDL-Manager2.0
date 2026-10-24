@@ -1,0 +1,12 @@
+{
+    "error": {
+        "code": "nothing_submitted",
+        "message": "No entries were submitted",
+        "skipped": [
+            {
+                "entry": "198.51.100.7",
+                "reason": "Already pending approval"
+            }
+        ]
+    }
+}

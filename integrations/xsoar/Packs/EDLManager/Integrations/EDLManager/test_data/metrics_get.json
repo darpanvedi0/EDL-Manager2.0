@@ -1,0 +1,114 @@
+{
+    "data": {
+        "generated_at": "2026-10-24T20:38:17+00:00",
+        "window": {
+            "days": 30,
+            "from": "2026-09-24T20:38:17+00:00",
+            "to": "2026-10-24T20:38:17+00:00"
+        },
+        "indicators": {
+            "active": {
+                "total": 1,
+                "ip": 1,
+                "domain": 0,
+                "url": 0
+            },
+            "added": 1,
+            "removed": 0
+        },
+        "requests": {
+            "submitted": 3,
+            "approved": 1,
+            "denied": 1,
+            "approval_rate": 0.5,
+            "pending": 1,
+            "oldest_pending_age_seconds": 2
+        },
+        "time_to_block": {
+            "count": 1,
+            "median_seconds": 0,
+            "p90_seconds": 0,
+            "by_priority": {
+                "critical": {
+                    "count": 0,
+                    "median_seconds": null,
+                    "p90_seconds": null
+                },
+                "high": {
+                    "count": 1,
+                    "median_seconds": 0,
+                    "p90_seconds": 0
+                },
+                "medium": {
+                    "count": 0,
+                    "median_seconds": null,
+                    "p90_seconds": null
+                },
+                "low": {
+                    "count": 0,
+                    "median_seconds": null,
+                    "p90_seconds": null
+                }
+            }
+        },
+        "time_to_enforcement": {
+            "count": 0,
+            "median_seconds": null,
+            "p90_seconds": null,
+            "coverage": 0
+        },
+        "request_to_enforcement": {
+            "count": 0,
+            "median_seconds": null,
+            "p90_seconds": null
+        },
+        "firewalls": {
+            "tracking": true,
+            "total": 1,
+            "polling": 1,
+            "stale": 0,
+            "clients": [
+                {
+                    "ip": "172.17.0.1",
+                    "user_agent": "PAN-OS 11.1",
+                    "lists": [
+                        "ip"
+                    ],
+                    "first_seen": "2026-10-24T20:38:17+00:00",
+                    "last_seen": "2026-10-24T20:38:17+00:00",
+                    "typical_interval_seconds": null,
+                    "stale": false
+                }
+            ]
+        },
+        "lists": {
+            "ip": {
+                "entries": 1,
+                "published_at": "2026-10-24T20:38:15+00:00",
+                "last_fetch_at": "2026-10-24T20:38:17+00:00",
+                "clients_last_24h": 1,
+                "current_version_fetched": true
+            },
+            "domain": {
+                "entries": 0,
+                "published_at": "2026-10-24T20:38:15+00:00",
+                "last_fetch_at": null,
+                "clients_last_24h": 0,
+                "current_version_fetched": false
+            },
+            "url": {
+                "entries": 0,
+                "published_at": "2026-10-24T20:38:15+00:00",
+                "last_fetch_at": null,
+                "clients_last_24h": 0,
+                "current_version_fetched": false
+            }
+        },
+        "summary": [
+            "Blocked right now: 1 indicator (1 IP address, 0 domains, 0 URLs).",
+            "Last 30 days: 1 request approved, 1 denied.",
+            "Request to approval: median 0 s, 90% within 0 s.",
+            "Firewall clients polling the lists: 1."
+        ]
+    }
+}

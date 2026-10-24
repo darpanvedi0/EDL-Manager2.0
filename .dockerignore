@@ -6,8 +6,9 @@
 Dockerfile
 compose.yaml
 
-# Tests run in CI, not in the image
+# Tests and SOAR integrations run in CI or on other platforms, not in the image
 tests/
+integrations/
 
 # Documentation is not served
 **/*.md

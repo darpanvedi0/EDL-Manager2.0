@@ -1,0 +1,27 @@
+{
+    "name": "EDL Manager",
+    "description": "Submit IP addresses, domains, and URLs for approval in EDL Manager and track them until they are published to the External Dynamic Lists your firewalls fetch.",
+    "support": "community",
+    "currentVersion": "1.0.0",
+    "author": "Darpan Vedi",
+    "url": "https://github.com/darpanvedi0/EDL-Manager2.0",
+    "email": "",
+    "categories": [
+        "Network Security"
+    ],
+    "tags": [],
+    "useCases": [],
+    "keywords": [
+        "EDL",
+        "External Dynamic List",
+        "blocklist",
+        "firewall",
+        "block IP",
+        "block domain",
+        "block URL"
+    ],
+    "marketplaces": [
+        "xsoar",
+        "marketplacev2"
+    ]
+}
