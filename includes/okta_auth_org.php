@@ -294,6 +294,9 @@ class OktaAuthOrg {
         error_log("DEBUG: Role assignment - Mapped to role: {$role}");
         error_log("DEBUG: Role assignment - Permissions: " . json_encode($permissions));
         
+        // New session ID for the logged-in session (prevents session fixation)
+        regenerate_session_on_login();
+        
         // Set session variables
         $_SESSION['authenticated'] = true;
         $_SESSION['okta_authenticated'] = true;

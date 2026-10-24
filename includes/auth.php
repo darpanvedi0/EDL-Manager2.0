@@ -29,6 +29,9 @@ class EDLAuth {
             return false;
         }
         
+        // New session ID for the logged-in session (prevents session fixation)
+        regenerate_session_on_login();
+        
         // Set LOCAL authentication session
         $_SESSION['authenticated'] = true;
         $_SESSION['username'] = $username;

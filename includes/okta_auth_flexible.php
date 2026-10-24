@@ -323,6 +323,9 @@ class OktaAuthFlexible {
         // Determine user role based on group membership
         $user_role = $this->determine_role($groups);
         
+        // New session ID for the logged-in session (prevents session fixation)
+        regenerate_session_on_login();
+        
         // Set session variables - BOTH authenticated and okta_authenticated
         $_SESSION['authenticated'] = true;
         $_SESSION['okta_authenticated'] = true;
