@@ -1,10 +1,13 @@
-# Sensitive configuration files
-config/okta_config.json
-config/teams_config.json
-data/users.json
+# Site-specific settings (copy config/config.local.php.example)
+config/config.local.php
 
-# Runtime data files
-data/*.json
+# Runtime data: users and password hashes, requests, audit logs, SSL keys,
+# generated web server configs. Only the deny rule and templates are committed.
+data/*
+!data/.htaccess
+!data/*.example.json
+
+# Generated EDL files
 edl-files/*.txt
 
 # Logs
@@ -26,8 +29,8 @@ tmp/
 temp/
 cache/
 
-# Web server specific
-.htaccess
+# Web server specific (site-level .htaccess only; data/.htaccess is committed)
+/.htaccess
 *.htpasswd
 
 # SSL certificates

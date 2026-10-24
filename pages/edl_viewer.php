@@ -17,6 +17,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_admin) {
     if (!validate_csrf_token($_POST['csrf_token'] ?? '')) {
         $error_message = 'Invalid security token. Please try again.';
     } else {
+        // Lock so a concurrent approval can't be lost when we rewrite the file
+        acquire_data_lock();
+        
         $action = sanitize_input($_POST['action'] ?? '');
         
         if ($action === 'delete_entry') {
@@ -47,8 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_admin) {
                         $regenerate_result = regenerate_edl_files();
                         
                         // Add audit log
-                        $audit_logs = read_json_file(DATA_DIR . '/audit_logs.json');
-                        $audit_logs[] = [
+                        append_audit_log([
                             'id' => uniqid('audit_', true),
                             'timestamp' => date('c'),
                             'action' => 'delete_entry',
@@ -56,8 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_admin) {
                             'user' => $_SESSION['username'],
                             'details' => "Deleted {$deleted_entry['type']} entry from active EDL",
                             'admin_comment' => "Entry removed from blocklist and marked as deleted"
-                        ];
-                        write_json_file(DATA_DIR . '/audit_logs.json', $audit_logs);
+                        ]);
                         
                         show_flash("Entry deleted successfully and removed from EDL files. Updated files: IP({$regenerate_result['ip_count']}), Domain({$regenerate_result['domain_count']}), URL({$regenerate_result['url_count']})", 'success');
                         header('Location: edl_viewer.php');
@@ -72,6 +73,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_admin) {
                 $error_message = 'Invalid entry ID provided.';
             }
         }
+        
+        release_data_lock();
     }
 }
 
@@ -152,10 +155,10 @@ function regenerate_edl_files() {
         mkdir(EDL_FILES_DIR, 0755, true);
     }
     
-    // Write EDL files with error checking
-    $ip_result = file_put_contents(EDL_FILES_DIR . '/ip_blocklist.txt', implode("\n", $ip_list));
-    $domain_result = file_put_contents(EDL_FILES_DIR . '/domain_blocklist.txt', implode("\n", $domain_list));
-    $url_result = file_put_contents(EDL_FILES_DIR . '/url_blocklist.txt', implode("\n", $url_list));
+    // Write EDL files atomically with error checking
+    $ip_result = write_file_atomic(EDL_FILES_DIR . '/ip_blocklist.txt', implode("\n", $ip_list), 0644);
+    $domain_result = write_file_atomic(EDL_FILES_DIR . '/domain_blocklist.txt', implode("\n", $domain_list), 0644);
+    $url_result = write_file_atomic(EDL_FILES_DIR . '/url_blocklist.txt', implode("\n", $url_list), 0644);
     
     if ($ip_result === false || $domain_result === false || $url_result === false) {
         error_log('Failed to write EDL files in edl_viewer.php');

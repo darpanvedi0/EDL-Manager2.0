@@ -1,6 +1,6 @@
 {
     "admin": {
-        "password": "$2a$12$2NYBgFYaLKinqcdxS4l7xuoq5yxGkDB9pDRR0u1xg5GgHhJcSoLTK",
+        "password": "REPLACE_WITH_HASH_FROM_password_hash()",
         "name": "System Administrator",
         "email": "admin@company.com",
         "role": "admin",
@@ -13,7 +13,7 @@
         ]
     },
     "approver": {
-        "password": "$2a$12$5rKDqsbdZLe8t82K.weTnOtwDFtkOf/gp3yyWf7fF.p38l0SKVrOK",
+        "password": "REPLACE_WITH_HASH_FROM_password_hash()",
         "name": "Security Approver",
         "email": "approver@company.com",
         "role": "approver",
@@ -23,12 +23,21 @@
         ]
     },
     "operator": {
-        "password": "$2a$12$3Vqfxz27vp98UviY152seuMM/bd8X4FYqEBkVIKwudVQq7UtN17R.",
+        "password": "REPLACE_WITH_HASH_FROM_password_hash()",
         "name": "Security Operator",
         "email": "operator@company.com",
         "role": "operator",
         "permissions": [
             "submit",
+            "view"
+        ]
+    },
+    "viewer": {
+        "password": "REPLACE_WITH_HASH_FROM_password_hash()",
+        "name": "Security Viewer",
+        "email": "viewer@company.com",
+        "role": "viewer",
+        "permissions": [
             "view"
         ]
     }

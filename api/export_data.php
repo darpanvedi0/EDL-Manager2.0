@@ -4,7 +4,7 @@ require_once '../config/config.php';
 require_once '../includes/functions.php';
 require_once '../includes/auth.php';
 
-session_start();
+header('Content-Type: application/json');
 
 $auth = new EDLAuth();
 if (!$auth->check_session() || !has_permission('manage')) {
@@ -50,16 +50,14 @@ try {
     header('Expires: 0');
     
     // Log the export
-    $audit_logs = $export_data['audit_logs'];
-    $audit_logs[] = [
+    append_audit_log([
         'id' => uniqid('audit_', true),
         'timestamp' => date('c'),
         'action' => 'export_data',
         'entry' => 'System Data',
         'user' => $_SESSION['username'],
         'details' => 'Exported system data backup'
-    ];
-    write_json_file(DATA_DIR . '/audit_logs.json', $audit_logs);
+    ]);
     
     echo json_encode($export_data, JSON_PRETTY_PRINT);
     

@@ -1,0 +1,5 @@
+# EDL Manager data directory: users, password hashes, audit logs, SSL keys.
+# Never serve anything from here. Requires "AllowOverride AuthConfig" (or All)
+# for this directory; better still, set EDL_DATA_DIR to a path outside the
+# web root (see config/config.local.php.example and README.md).
+Require all denied

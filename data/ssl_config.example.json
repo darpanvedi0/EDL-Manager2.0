@@ -14,7 +14,5 @@
     "hsts_max_age": 31536000,
     "edl_http_port": 80,
     "edl_https_redirect": false,
-    "auto_redirect_http": true,
-    "updated_at": "2025-06-25T17:23:56+02:00",
-    "updated_by": "admin"
+    "auto_redirect_http": true
 }

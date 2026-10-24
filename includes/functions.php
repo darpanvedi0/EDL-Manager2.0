@@ -31,12 +31,129 @@ function read_json_file($file) {
     return $content ? json_decode($content, true) : [];
 }
 
-function write_json_file($file, $data) {
+/**
+ * Exclusive lock shared by every JSON data file.
+ *
+ * Hold it across any read-modify-write so two requests (e.g. two approvers)
+ * can't both read the same file and overwrite each other's changes. One lock
+ * for all files keeps multi-file updates (pending -> approved -> audit log)
+ * consistent without lock-ordering deadlocks.
+ *
+ * The lock is re-entrant: nested acquire/release pairs only release the lock
+ * when the outermost pair finishes. PHP also releases it when the request
+ * ends, so a code path that calls exit() while holding it is safe.
+ */
+function acquire_data_lock() {
+    data_lock_handle(true);
+}
+
+function release_data_lock() {
+    data_lock_handle(false);
+}
+
+function data_lock_handle($acquire) {
+    static $handle = null;
+    static $depth = 0;
+
+    if ($acquire) {
+        if ($depth === 0) {
+            if (!is_dir(DATA_DIR)) {
+                mkdir(DATA_DIR, 0750, true);
+            }
+            $handle = fopen(DATA_DIR . '/.data.lock', 'c');
+            if ($handle === false || !flock($handle, LOCK_EX)) {
+                if ($handle !== false) {
+                    fclose($handle);
+                }
+                $handle = null;
+                throw new RuntimeException('Unable to lock data directory ' . DATA_DIR);
+            }
+        }
+        $depth++;
+    } elseif ($depth > 0 && --$depth === 0) {
+        flock($handle, LOCK_UN);
+        fclose($handle);
+        $handle = null;
+    }
+}
+
+function with_data_lock(callable $callback) {
+    acquire_data_lock();
+    try {
+        return $callback();
+    } finally {
+        release_data_lock();
+    }
+}
+
+/**
+ * Write a file atomically: write a temp file in the same directory, then
+ * rename() it over the target. Readers (including firewalls fetching EDL
+ * files) always see either the old or the new contents, never a partial file.
+ *
+ * $mode defaults to the existing file's permissions, or 0640 for a new file.
+ */
+function write_file_atomic($file, $contents, $mode = null) {
     $dir = dirname($file);
     if (!is_dir($dir)) {
-        mkdir($dir, 0755, true);
+        mkdir($dir, 0750, true);
     }
-    return file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT));
+    if ($mode === null) {
+        $mode = file_exists($file) ? (fileperms($file) & 0777) : 0640;
+    }
+
+    $tmp = $dir . '/.' . basename($file) . '.' . bin2hex(random_bytes(6)) . '.tmp';
+    $handle = @fopen($tmp, 'x');
+    if ($handle === false) {
+        error_log("write_file_atomic: cannot create temp file in {$dir}");
+        return false;
+    }
+
+    $written = fwrite($handle, $contents);
+    $flushed = fflush($handle) && (!function_exists('fsync') || fsync($handle));
+    fclose($handle);
+
+    if ($written !== strlen($contents) || !$flushed) {
+        @unlink($tmp);
+        error_log("write_file_atomic: short write to {$tmp}");
+        return false;
+    }
+
+    @chmod($tmp, $mode);
+    if (!rename($tmp, $file)) {
+        @unlink($tmp);
+        error_log("write_file_atomic: cannot replace {$file}");
+        return false;
+    }
+    return true;
+}
+
+function write_json_file($file, $data) {
+    $json = json_encode($data, JSON_PRETTY_PRINT);
+    if ($json === false) {
+        error_log("write_json_file: cannot encode data for {$file}: " . json_last_error_msg());
+        return false;
+    }
+    return with_data_lock(function () use ($file, $json) {
+        return write_file_atomic($file, $json);
+    });
+}
+
+/**
+ * Read a JSON file, pass its contents to $callback, and write back whatever
+ * the callback returns, all under the data lock.
+ */
+function update_json_file($file, callable $callback) {
+    return with_data_lock(function () use ($file, $callback) {
+        return write_json_file($file, $callback(read_json_file($file)));
+    });
+}
+
+function append_audit_log(array $log_entry) {
+    return update_json_file(DATA_DIR . '/audit_logs.json', function ($logs) use ($log_entry) {
+        $logs[] = $log_entry;
+        return $logs;
+    });
 }
 
 function show_flash($message, $type = 'info') {
@@ -152,27 +269,29 @@ function log_activity($action, $details = '', $entry = '', $user = null) {
         'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'unknown'
     ];
     
-    $logs = read_json_file(DATA_DIR . '/audit_logs.json');
-    $logs[] = $log_entry;
-    
-    // Keep only last 10,000 logs to prevent file from growing too large
-    if (count($logs) > 10000) {
-        $logs = array_slice($logs, -10000);
-    }
-    
-    return write_json_file(DATA_DIR . '/audit_logs.json', $logs);
+    return update_json_file(DATA_DIR . '/audit_logs.json', function ($logs) use ($log_entry) {
+        $logs[] = $log_entry;
+        
+        // Keep only last 10,000 logs to prevent file from growing too large
+        if (count($logs) > 10000) {
+            $logs = array_slice($logs, -10000);
+        }
+        
+        return $logs;
+    });
 }
 
 function clean_old_logs($days = 90) {
     $cutoff_date = strtotime("-{$days} days");
     
-    $logs = read_json_file(DATA_DIR . '/audit_logs.json');
-    $cleaned_logs = array_filter($logs, function($log) use ($cutoff_date) {
-        $log_time = strtotime($log['timestamp'] ?? '');
-        return $log_time && $log_time > $cutoff_date;
+    return update_json_file(DATA_DIR . '/audit_logs.json', function ($logs) use ($cutoff_date) {
+        $cleaned_logs = array_filter($logs, function($log) use ($cutoff_date) {
+            $log_time = strtotime($log['timestamp'] ?? '');
+            return $log_time && $log_time > $cutoff_date;
+        });
+        
+        return array_values($cleaned_logs);
     });
-    
-    return write_json_file(DATA_DIR . '/audit_logs.json', array_values($cleaned_logs));
 }
 
 function backup_data($backup_dir = 'backups') {
@@ -212,5 +331,4 @@ function get_system_stats() {
     ];
 }
 
-echo "<!-- EDL Manager Functions loaded successfully -->\n";
 ?>
