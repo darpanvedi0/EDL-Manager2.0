@@ -23,6 +23,18 @@ function csrf_token_field() {
     return '<input type="hidden" name="csrf_token" value="' . generate_csrf_token() . '">';
 }
 
+/**
+ * Call right before marking a session as logged in. Issues a new session ID
+ * and deletes the old one, so an ID planted before login (session fixation)
+ * is useless afterwards, and rotates the CSRF token.
+ */
+function regenerate_session_on_login() {
+    if (session_status() !== PHP_SESSION_ACTIVE || !session_regenerate_id(true)) {
+        throw new RuntimeException('Could not regenerate the session ID at login');
+    }
+    unset($_SESSION['csrf_token']);
+}
+
 function read_json_file($file) {
     if (!file_exists($file)) {
         return [];

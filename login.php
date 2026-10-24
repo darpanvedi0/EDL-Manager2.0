@@ -65,7 +65,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = sanitize_input($_POST['username'] ?? '');
     $password = $_POST['password'] ?? '';
     
-    if (empty($username) || empty($password)) {
+    if (!validate_csrf_token($_POST['csrf_token'] ?? '')) {
+        $error_message = 'Invalid security token. Please try again.';
+    } elseif (empty($username) || empty($password)) {
         $error_message = 'Please enter both username and password.';
     } else {
         if ($auth->authenticate($username, $password)) {
@@ -485,6 +487,7 @@ $favicon_ico_base64 = 'data:image/svg+xml;base64,' . base64_encode($favicon_ico_
                 
                 <!-- Local Login Form -->
                 <form method="POST" class="needs-validation" novalidate>
+                    <?php echo csrf_token_field(); ?>
                     <div class="mb-3">
                         <label for="username" class="form-label fw-bold">Username</label>
                         <div class="input-group">
