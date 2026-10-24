@@ -35,8 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             write_json_file(DATA_DIR . '/teams_config.json', $teams_config);
             
             // Log configuration change
-            $audit_logs = read_json_file(DATA_DIR . '/audit_logs.json');
-            $audit_logs[] = [
+            append_audit_log([
                 'id' => uniqid('audit_', true),
                 'timestamp' => date('c'),
                 'action' => 'config_change',
@@ -44,8 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'user' => $_SESSION['username'],
                 'details' => 'Updated Microsoft Teams configuration',
                 'admin_comment' => $teams_config['enabled'] ? 'Teams notifications enabled' : 'Teams notifications disabled'
-            ];
-            write_json_file(DATA_DIR . '/audit_logs.json', $audit_logs);
+            ]);
             
             show_flash('Teams configuration saved successfully.', 'success');
             header('Location: teams_config.php');

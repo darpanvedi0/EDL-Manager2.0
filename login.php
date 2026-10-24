@@ -1,7 +1,5 @@
 <?php
 // login.php - Fixed with org-level Okta integration + Original Matrix UI
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
 
 // Load required files in correct order
 require_once 'config/config.php';

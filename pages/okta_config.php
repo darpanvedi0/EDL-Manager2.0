@@ -67,16 +67,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 show_flash('Okta configuration saved successfully!', 'success');
                 
                 // Add audit log
-                $audit_logs = read_json_file(DATA_DIR . '/audit_logs.json');
-                $audit_logs[] = [
+                append_audit_log([
                     'id' => uniqid('audit_', true),
                     'timestamp' => date('c'),
                     'action' => 'okta_config_update',
                     'entry' => 'Okta SSO Configuration',
                     'user' => $_SESSION['username'],
                     'details' => 'Updated Okta SSO configuration - Enabled: ' . ($okta_config['enabled'] ? 'Yes' : 'No')
-                ];
-                write_json_file(DATA_DIR . '/audit_logs.json', $audit_logs);
+                ]);
                 
                 header('Location: okta_config.php');
                 exit;

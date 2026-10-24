@@ -3,8 +3,6 @@
 require_once '../config/config.php';
 require_once '../includes/functions.php';
 
-session_start();
-
 try {
     // Try org-level Okta auth first
     $okta_auth = null;

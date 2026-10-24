@@ -6,14 +6,15 @@ require_once '../includes/auth.php';
 
 header('Content-Type: application/json');
 
-session_start();
-
 $auth = new EDLAuth();
 if (!$auth->check_session() || !has_permission('manage')) {
     http_response_code(403);
     echo json_encode(['success' => false, 'error' => 'Access denied']);
     exit;
 }
+
+// Lock so an approval can't land between reading the entries and writing the files
+acquire_data_lock();
 
 try {
     // Load approved entries
@@ -43,10 +44,13 @@ try {
         mkdir(EDL_FILES_DIR, 0755, true);
     }
     
-    // Write EDL files
-    file_put_contents(EDL_FILES_DIR . '/ip_blocklist.txt', implode("\n", $ip_list));
-    file_put_contents(EDL_FILES_DIR . '/domain_blocklist.txt', implode("\n", $domain_list));
-    file_put_contents(EDL_FILES_DIR . '/url_blocklist.txt', implode("\n", $url_list));
+    // Write EDL files atomically so firewalls never fetch a partial list
+    $written = write_file_atomic(EDL_FILES_DIR . '/ip_blocklist.txt', implode("\n", $ip_list), 0644)
+        && write_file_atomic(EDL_FILES_DIR . '/domain_blocklist.txt', implode("\n", $domain_list), 0644)
+        && write_file_atomic(EDL_FILES_DIR . '/url_blocklist.txt', implode("\n", $url_list), 0644);
+    if (!$written) {
+        throw new Exception('Failed to write EDL files. Check that edl-files/ is writable.');
+    }
     
     $stats = [
         'ip_count' => count($ip_list),
@@ -55,16 +59,14 @@ try {
     ];
     
     // Log the regeneration
-    $audit_logs = read_json_file(DATA_DIR . '/audit_logs.json');
-    $audit_logs[] = [
+    append_audit_log([
         'id' => uniqid('audit_', true),
         'timestamp' => date('c'),
         'action' => 'regenerate_edl',
         'entry' => 'EDL Files',
         'user' => $_SESSION['username'],
         'details' => "Regenerated EDL files: {$stats['ip_count']} IPs, {$stats['domain_count']} domains, {$stats['url_count']} URLs"
-    ];
-    write_json_file(DATA_DIR . '/audit_logs.json', $audit_logs);
+    ]);
     
     echo json_encode([
         'success' => true,
@@ -79,4 +81,6 @@ try {
         'error' => $e->getMessage()
     ]);
 }
+
+release_data_lock();
 ?>

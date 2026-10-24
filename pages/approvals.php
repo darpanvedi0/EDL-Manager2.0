@@ -40,10 +40,10 @@ function generate_edl_files() {
         }
     }
     
-    // Write EDL files
-    file_put_contents(EDL_FILES_DIR . '/ip_blocklist.txt', implode("\n", $ip_entries));
-    file_put_contents(EDL_FILES_DIR . '/domain_blocklist.txt', implode("\n", $domain_entries));
-    file_put_contents(EDL_FILES_DIR . '/url_blocklist.txt', implode("\n", $url_entries));
+    // Write EDL files atomically so firewalls never fetch a partial list
+    write_file_atomic(EDL_FILES_DIR . '/ip_blocklist.txt', implode("\n", $ip_entries), 0644);
+    write_file_atomic(EDL_FILES_DIR . '/domain_blocklist.txt', implode("\n", $domain_entries), 0644);
+    write_file_atomic(EDL_FILES_DIR . '/url_blocklist.txt', implode("\n", $url_entries), 0644);
 }
 
 // Enhanced Teams notification function for bulk operations
@@ -92,6 +92,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!validate_csrf_token($_POST['csrf_token'] ?? '')) {
         $error_message = 'Invalid security token. Please try again.';
     } else {
+        // Hold the data lock for the whole approve/deny transaction so two
+        // approvers can't overwrite each other's changes. Teams notifications
+        // are queued and sent after the lock is released.
+        acquire_data_lock();
+        $teams_notifications = [];
+        
         $action = sanitize_input($_POST['action'] ?? '');
         $admin_comment = sanitize_input($_POST['admin_comment'] ?? '');
         
@@ -195,14 +201,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             // Generate EDL files
                             generate_edl_files();
                             
-                            // Send bulk Teams notification
-                            if (function_exists('send_teams_notification')) {
+                            // Queue bulk Teams notification
+                            $teams_notifications[] = function () use ($approved_requests, $admin_comment) {
                                 send_bulk_teams_notification('approve', $approved_requests, $admin_comment, $_SESSION['username']);
-                            }
+                            };
                             
                             // Add bulk audit log
-                            $audit_logs = read_json_file(DATA_DIR . '/audit_logs.json');
-                            $audit_logs[] = [
+                            append_audit_log([
                                 'id' => uniqid('audit_', true),
                                 'timestamp' => date('c'),
                                 'action' => 'bulk_approve',
@@ -210,8 +215,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 'details' => "Bulk approved {$processed_count} requests",
                                 'admin_comment' => $admin_comment,
                                 'processed_count' => $processed_count
-                            ];
-                            write_json_file(DATA_DIR . '/audit_logs.json', $audit_logs);
+                            ]);
                             
                             show_flash("Successfully approved {$processed_count} requests. Entries added to blocklists.", 'success');
                         } else {
@@ -265,14 +269,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $pending_requests = array_values($pending_requests);
                         write_json_file(DATA_DIR . '/pending_requests.json', $pending_requests);
                         
-                        // Send bulk Teams notification
-                        if (function_exists('send_teams_notification')) {
+                        // Queue bulk Teams notification
+                        $teams_notifications[] = function () use ($denied_requests, $admin_comment) {
                             send_bulk_teams_notification('deny', $denied_requests, $admin_comment, $_SESSION['username']);
-                        }
+                        };
                         
                         // Add bulk audit log
-                        $audit_logs = read_json_file(DATA_DIR . '/audit_logs.json');
-                        $audit_logs[] = [
+                        append_audit_log([
                             'id' => uniqid('audit_', true),
                             'timestamp' => date('c'),
                             'action' => 'bulk_deny',
@@ -280,8 +283,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             'details' => "Bulk denied {$processed_count} requests",
                             'admin_comment' => $admin_comment,
                             'processed_count' => $processed_count
-                        ];
-                        write_json_file(DATA_DIR . '/audit_logs.json', $audit_logs);
+                        ]);
                         
                         show_flash("Successfully denied {$processed_count} requests.", 'success');
                     }
@@ -365,17 +367,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 // Generate EDL files
                                 generate_edl_files();
                                 
-                                // Send Teams notification for individual approval
+                                // Queue Teams notification for individual approval
                                 if (function_exists('send_teams_notification')) {
-                                    send_teams_notification('approved', $request_to_process, [
-                                        'processed_by' => $_SESSION['username'],
-                                        'comment' => $admin_comment
-                                    ]);
+                                    $teams_notifications[] = function () use ($request_to_process, $admin_comment) {
+                                        send_teams_notification('approved', $request_to_process, [
+                                            'processed_by' => $_SESSION['username'],
+                                            'comment' => $admin_comment
+                                        ]);
+                                    };
                                 }
                                 
                                 // Add audit log
-                                $audit_logs = read_json_file(DATA_DIR . '/audit_logs.json');
-                                $audit_logs[] = [
+                                append_audit_log([
                                     'id' => uniqid('audit_', true),
                                     'timestamp' => date('c'),
                                     'action' => 'approve',
@@ -384,8 +387,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     'details' => "Approved {$request_to_process['type']} request from {$request_to_process['submitted_by']}",
                                     'request_id' => $request_id,
                                     'admin_comment' => $admin_comment
-                                ];
-                                write_json_file(DATA_DIR . '/audit_logs.json', $audit_logs);
+                                ]);
                                 
                                 show_flash("Request approved successfully. Entry added to {$request_to_process['type']} blocklist.", 'success');
                             }
@@ -425,17 +427,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $pending_requests = array_values($pending_requests);
                             write_json_file(DATA_DIR . '/pending_requests.json', $pending_requests);
                             
-                            // Send Teams notification for individual denial
+                            // Queue Teams notification for individual denial
                             if (function_exists('send_teams_notification')) {
-                                send_teams_notification('denied', $request_to_process, [
-                                    'processed_by' => $_SESSION['username'],
-                                    'comment' => $admin_comment
-                                ]);
+                                $teams_notifications[] = function () use ($request_to_process, $admin_comment) {
+                                    send_teams_notification('denied', $request_to_process, [
+                                        'processed_by' => $_SESSION['username'],
+                                        'comment' => $admin_comment
+                                    ]);
+                                };
                             }
                             
                             // Add audit log
-                            $audit_logs = read_json_file(DATA_DIR . '/audit_logs.json');
-                            $audit_logs[] = [
+                            append_audit_log([
                                 'id' => uniqid('audit_', true),
                                 'timestamp' => date('c'),
                                 'action' => 'deny',
@@ -444,8 +447,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 'details' => "Denied {$request_to_process['type']} request from {$request_to_process['submitted_by']}",
                                 'request_id' => $request_id,
                                 'admin_comment' => $admin_comment
-                            ];
-                            write_json_file(DATA_DIR . '/audit_logs.json', $audit_logs);
+                            ]);
                             
                             show_flash('Request denied successfully.', 'success');
                         }
@@ -454,6 +456,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $error_message = 'Request not found or already processed.';
                 }
             }
+        }
+        
+        release_data_lock();
+        foreach ($teams_notifications as $send_notification) {
+            $send_notification();
         }
     }
 }

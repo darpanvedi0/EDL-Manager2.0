@@ -3,8 +3,6 @@
 require_once 'config/config.php';
 require_once 'includes/functions.php';
 
-session_start();
-
 // Check if user was logged in via Okta
 $was_okta_user = isset($_SESSION['okta_authenticated']) && $_SESSION['okta_authenticated'];
 

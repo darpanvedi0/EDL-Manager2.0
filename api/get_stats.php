@@ -6,8 +6,6 @@ require_once '../includes/auth.php';
 
 header('Content-Type: application/json');
 
-session_start();
-
 $auth = new EDLAuth();
 if (!$auth->check_session()) {
     http_response_code(403);

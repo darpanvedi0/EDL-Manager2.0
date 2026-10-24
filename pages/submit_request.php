@@ -104,6 +104,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!validate_csrf_token($_POST['csrf_token'] ?? '')) {
         $error_message = 'Invalid security token. Please try again.';
     } else {
+        // Hold the data lock from the duplicate checks through the write so
+        // concurrent submissions can't both pass the checks or drop each other.
+        acquire_data_lock();
+        
         $submission_type = sanitize_input($_POST['submission_type'] ?? 'individual');
         $justification = sanitize_input($_POST['justification'] ?? '');
         $priority = sanitize_input($_POST['priority'] ?? 'medium');
@@ -281,9 +285,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'ip' => $_SERVER['REMOTE_ADDR'] ?? 'Unknown'
                 ];
                 
-                $audit_logs = read_json_file(DATA_DIR . '/audit_logs.json');
-                $audit_logs[] = $audit_entry;
-                write_json_file(DATA_DIR . '/audit_logs.json', $audit_logs);
+                append_audit_log($audit_entry);
+                
+                // Data is saved; don't hold the lock during the Teams webhook call
+                release_data_lock();
                 
                 // Send Teams notification if available
                 if (function_exists('send_teams_notification')) {
@@ -313,6 +318,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $error_message = implode('<br>', $errors);
         }
+        
+        release_data_lock();
     }
 }
 
