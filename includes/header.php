@@ -47,7 +47,7 @@ function isActive($page_name, $current_page, $current_dir = '') {
 }
 
 // Admin pages for dropdown highlighting
-$admin_pages = ['okta_config.php', 'teams_config.php', 'ssl_config.php', 'audit_log.php'];
+$admin_pages = ['okta_config.php', 'teams_config.php', 'ssl_config.php', 'api_keys.php', 'audit_log.php'];
 $is_admin_page_active = in_array($current_page, $admin_pages);
 
 // Generate base64 encoded security shield favicon
@@ -524,6 +524,13 @@ $favicon_ico_base64 = 'data:image/svg+xml;base64,' . base64_encode($favicon_ico_
                             </a>
                         </li>
                         
+                        <!-- Impact Metrics - Always visible to authenticated users -->
+                        <li class="nav-item">
+                            <a class="nav-link <?php echo isActive('metrics.php', $current_page); ?>" href="<?php echo $is_in_pages ? 'metrics.php' : 'pages/metrics.php'; ?>">
+                                <i class="fas fa-chart-line"></i>Impact
+                            </a>
+                        </li>
+                        
                         <!-- Admin Dropdown - For users with manage permission -->
                         <?php if (in_array('manage', $user_permissions)): ?>
                         <li class="nav-item dropdown">
@@ -548,6 +555,10 @@ $favicon_ico_base64 = 'data:image/svg+xml;base64,' . base64_encode($favicon_ico_
                                 <li><a class="dropdown-item <?php echo isActive('ssl_config.php', $current_page); ?>" href="<?php echo $is_in_pages ? 'ssl_config.php' : 'pages/ssl_config.php'; ?>">
                                     <i class="fas fa-lock text-warning"></i>SSL/TLS Configuration
                                     <small class="text-muted d-block">Configure HTTPS encryption</small>
+                                </a></li>
+                                <li><a class="dropdown-item <?php echo isActive('api_keys.php', $current_page); ?>" href="<?php echo $is_in_pages ? 'api_keys.php' : 'pages/api_keys.php'; ?>">
+                                    <i class="fas fa-key text-success"></i>API Keys
+                                    <small class="text-muted d-block">REST API access for SOAR and scripts</small>
                                 </a></li>
                                 
                                 <li><hr class="dropdown-divider"></li>

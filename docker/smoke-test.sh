@@ -100,6 +100,50 @@ curl -s -c "$jar" -b "$jar" -o /dev/null --data-urlencode "csrf_token=$(form_val
 grep -qx '203.0.113.25' <(curl -s "$base/edl-files/ip_blocklist.txt") \
     && pass "approved IP is published in ip_blocklist.txt" || fail "approved IP missing from ip_blocklist.txt"
 
+echo "== REST API"
+json_get() {
+    python3 -c 'import json, sys
+d = json.load(sys.stdin)
+for k in sys.argv[1].split("."):
+    d = d[int(k)] if k.isdigit() else d[k]
+print(d)' "$1" 2>/dev/null
+}
+expect_status 200 /api/v1/health
+expect_status 401 /api/v1/requests
+expect_status 200 /api/v1/openapi.yaml
+keys_page="$(curl -s -c "$jar" -b "$jar" "$base/pages/api_keys.php")"
+curl -s -c "$jar" -b "$jar" -o /dev/null --data-urlencode "csrf_token=$(form_value csrf_token <<<"$keys_page")" \
+    -d action=create -d name=smoke -d 'permissions[]=view' -d 'permissions[]=submit' -d 'permissions[]=approve' \
+    "$base/pages/api_keys.php"
+key="$(curl -s -c "$jar" -b "$jar" "$base/pages/api_keys.php" | grep -o 'edl_[0-9a-f]\{12\}_[A-Za-z0-9_-]\{43\}' | head -1)"
+[[ -n "$key" ]] && pass "API key shown once after creating it" || fail "no API key shown after creating one"
+api() { curl -s -H "Authorization: Bearer $key" -H 'Content-Type: application/json' "$@"; }
+created="$(api -X POST -d '{"entry":"192.0.2.50","justification":"Smoke test","servicenow_ticket":"SIR1234567","priority":"critical"}' "$base/api/v1/requests")"
+api_request="$(json_get data.created.0.id <<<"$created")"
+[[ -n "$api_request" ]] && pass "API submission creates a pending request" || fail "API submission failed: $created"
+got="$(api -o /dev/null -w '%{http_code}' -X POST -d '{"comment":"ok"}' "$base/api/v1/requests/$api_request/approve")"
+[[ "$got" == 200 ]] && pass "API approval" || fail "API approval -> $got"
+grep -qx '192.0.2.50' <(curl -s -A smoke-firewall "$base/edl-files/ip_blocklist.txt") \
+    && pass "API-approved IP is published" || fail "API-approved IP missing from ip_blocklist.txt"
+got="$(api "$base/api/v1/requests/$api_request" | json_get data.status)"
+[[ "$got" == approved ]] && pass "request status reads approved" || fail "request status: $got"
+entry_id="$(api "$base/api/v1/entries?q=192.0.2.50" | json_get data.0.id)"
+got="$(api -o /dev/null -w '%{http_code}' -X DELETE "$base/api/v1/entries/$entry_id")"
+[[ "$got" == 403 ]] && pass "key without \"remove\" can't delete entries" || fail "DELETE without permission -> $got"
+curl -sI "$base/edl-files/ip_blocklist.txt" | grep -qi '^set-cookie' \
+    && fail "list download sets a session cookie" || pass "list downloads set no cookie"
+
+echo "== Impact metrics"
+metrics="$(api "$base/api/v1/metrics?days=1")"
+[[ "$(json_get data.firewalls.tracking <<<"$metrics")" == True ]] && pass "list fetches are tracked" || fail "fetch tracking is off"
+grep -q 'smoke-firewall' <<<"$metrics" && pass "firewall client listed by user agent" || fail "firewall client missing from metrics"
+got="$(json_get data.time_to_enforcement.count <<<"$metrics")"
+[[ "$got" =~ ^[0-9]+$ && "$got" -ge 2 ]] && pass "time to enforcement measured for both approvals" || fail "time to enforcement count: $got"
+got="$(curl -s -b "$jar" -o /dev/null -w '%{http_code}' "$base/pages/metrics.php")"
+[[ "$got" == 200 ]] && pass "Impact page loads" || fail "Impact page -> $got"
+got="$(curl -s -b "$jar" "$base/pages/metrics.php?days=7&format=json" | json_get window.days)"
+[[ "$got" == 7 ]] && pass "Impact JSON export" || fail "Impact JSON export: $got"
+
 if (( failures > 0 )); then
     echo "== Container logs"
     docker logs "$name" 2>&1 | tail -50

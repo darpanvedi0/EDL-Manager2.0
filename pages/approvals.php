@@ -3,6 +3,7 @@ require_once '../config/config.php';
 require_once '../includes/functions.php';
 require_once '../includes/auth.php';
 require_once '../includes/validation.php';
+require_once '../includes/edl_lists.php';
 
 // Load Teams notifications if file exists (optional)
 if (file_exists('../includes/teams_notifications.php')) {
@@ -15,36 +16,6 @@ $auth->require_permission('approve');
 $page_title = 'Approvals';
 $error_message = '';
 $success_message = '';
-
-// Function to generate EDL files after approval
-function generate_edl_files() {
-    $approved_entries = read_json_file(DATA_DIR . '/approved_entries.json');
-    
-    $ip_entries = [];
-    $domain_entries = [];
-    $url_entries = [];
-    
-    foreach ($approved_entries as $entry) {
-        if (isset($entry['status']) && $entry['status'] === 'active') {
-            switch ($entry['type']) {
-                case 'ip':
-                    $ip_entries[] = $entry['entry'];
-                    break;
-                case 'domain':
-                    $domain_entries[] = $entry['entry'];
-                    break;
-                case 'url':
-                    $url_entries[] = $entry['entry'];
-                    break;
-            }
-        }
-    }
-    
-    // Write EDL files atomically so firewalls never fetch a partial list
-    write_file_atomic(EDL_FILES_DIR . '/ip_blocklist.txt', implode("\n", $ip_entries), 0644);
-    write_file_atomic(EDL_FILES_DIR . '/domain_blocklist.txt', implode("\n", $domain_entries), 0644);
-    write_file_atomic(EDL_FILES_DIR . '/url_blocklist.txt', implode("\n", $url_entries), 0644);
-}
 
 // Enhanced Teams notification function for bulk operations
 function send_bulk_teams_notification($action, $requests, $admin_comment = '', $processed_by = '') {
@@ -199,7 +170,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             write_json_file(DATA_DIR . '/pending_requests.json', $pending_requests);
                             
                             // Generate EDL files
-                            generate_edl_files();
+                            write_edl_lists();
                             
                             // Queue bulk Teams notification
                             $teams_notifications[] = function () use ($approved_requests, $admin_comment) {
@@ -365,7 +336,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 write_json_file(DATA_DIR . '/pending_requests.json', $pending_requests);
                                 
                                 // Generate EDL files
-                                generate_edl_files();
+                                write_edl_lists();
                                 
                                 // Queue Teams notification for individual approval
                                 if (function_exists('send_teams_notification')) {

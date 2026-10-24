@@ -6,6 +6,9 @@
 Dockerfile
 compose.yaml
 
+# Tests run in CI, not in the image
+tests/
+
 # Documentation is not served
 **/*.md
 SSL Cert Install.txt

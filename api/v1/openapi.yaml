@@ -1,0 +1,645 @@
+openapi: 3.1.0
+info:
+  title: EDL Manager API
+  version: 1.0.0
+  summary: Submit, approve, and track firewall blocklist entries.
+  description: |
+    The EDL Manager API lets SOAR platforms, SIEM playbooks, and scripts work
+    with the same approval workflow as the web UI. Entries submitted through
+    the API wait for approval like any other request; once approved, they are
+    published to the External Dynamic Lists that firewalls fetch.
+
+    Authenticate with an API key created under Admin > API Keys, sent as
+    `Authorization: Bearer <token>` or `X-API-Key: <token>`. Each key has
+    some of the permissions `view`, `submit`, `approve`, and `remove`.
+
+    Errors use one shape: `{"error": {"code": "...", "message": "..."}}`.
+  license:
+    name: MIT
+    identifier: MIT
+servers:
+  - url: /api/v1
+    description: This EDL Manager. Use /api/v1/index.php if the web server doesn't route /api/v1/* to the API.
+security:
+  - bearer: []
+  - apiKey: []
+tags:
+  - name: Requests
+    description: Entries waiting for, or decided by, an approver.
+  - name: Entries
+    description: Approved entries, active or removed from the blocklist.
+  - name: Metrics
+  - name: Service
+
+paths:
+  /health:
+    get:
+      tags: [Service]
+      summary: Check that the API is up
+      security: []
+      operationId: getHealth
+      responses:
+        "200":
+          description: The API is up.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, version]
+                properties:
+                  status: { type: string, const: ok }
+                  version: { type: string, examples: ["2.0.0"] }
+
+  /requests:
+    get:
+      tags: [Requests]
+      summary: List pending requests
+      description: Newest first. Requires `view`.
+      operationId: listRequests
+      parameters:
+        - $ref: "#/components/parameters/type"
+        - $ref: "#/components/parameters/q"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
+      responses:
+        "200":
+          description: A page of pending requests.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Page"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/Request" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Requests]
+      summary: Submit entries for approval
+      description: |
+        Requires `submit`. Send one `entry` or up to 500 `entries`. The type is
+        detected when omitted. Entries that are invalid, already blocked,
+        already pending, or previously denied are skipped with a reason; the
+        rest are created. Entries containing `& < > " '` are not supported yet.
+      operationId: createRequests
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NewRequests" }
+            examples:
+              single:
+                value:
+                  entry: 198.51.100.7
+                  justification: C2 server from incident IR-2291
+                  servicenow_ticket: SIR0012345
+                  priority: high
+              bulk:
+                value:
+                  entries:
+                    - evil.example.com
+                    - entry: https://bad.example.net/login
+                      type: url
+                  justification: Phishing campaign
+                  servicenow_ticket: INC0012345
+      responses:
+        "201":
+          description: At least one entry was submitted.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [created, skipped]
+                    properties:
+                      created:
+                        type: array
+                        items: { $ref: "#/components/schemas/Request" }
+                      skipped:
+                        type: array
+                        items: { $ref: "#/components/schemas/Skipped" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "413": { $ref: "#/components/responses/Error" }
+        "422":
+          description: |
+            `validation_failed`: a field is missing or malformed.
+            `nothing_submitted`: every entry was skipped; see `error.skipped`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /requests/{id}:
+    get:
+      tags: [Requests]
+      summary: Look up a request
+      description: |
+        Requires `view`. Works after the request is decided, so a playbook can
+        poll it. `record` is a Request while pending, an Entry once approved
+        (status `approved`, or `deleted` if later removed), and a Denial if
+        denied.
+      operationId: getRequest
+      parameters:
+        - $ref: "#/components/parameters/id"
+      responses:
+        "200":
+          description: The request and where it is now.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [request_id, status, record]
+                    properties:
+                      request_id: { type: string }
+                      status:
+                        type: string
+                        enum: [pending, approved, denied, deleted]
+                      record:
+                        oneOf:
+                          - $ref: "#/components/schemas/Request"
+                          - $ref: "#/components/schemas/Entry"
+                          - $ref: "#/components/schemas/Denial"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /requests/{id}/approve:
+    post:
+      tags: [Requests]
+      summary: Approve a pending request
+      description: Requires `approve`. The entry is published to its blocklist immediately.
+      operationId: approveRequest
+      parameters:
+        - $ref: "#/components/parameters/id"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                comment: { type: string }
+      responses:
+        "200":
+          description: The new blocklist entry.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: "#/components/schemas/Entry" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /requests/{id}/deny:
+    post:
+      tags: [Requests]
+      summary: Deny a pending request
+      description: Requires `approve`. A reason is required.
+      operationId: denyRequest
+      parameters:
+        - $ref: "#/components/parameters/id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string }
+      responses:
+        "200":
+          description: The denial.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: "#/components/schemas/Denial" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /entries:
+    get:
+      tags: [Entries]
+      summary: List blocklist entries
+      description: Newest first. Requires `view`.
+      operationId: listEntries
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, deleted, all]
+            default: active
+        - $ref: "#/components/parameters/type"
+        - $ref: "#/components/parameters/q"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
+      responses:
+        "200":
+          description: A page of entries.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Page"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/Entry" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /entries/{id}:
+    get:
+      tags: [Entries]
+      summary: Get an entry
+      description: Requires `view`.
+      operationId: getEntry
+      parameters:
+        - $ref: "#/components/parameters/id"
+      responses:
+        "200":
+          description: The entry.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: "#/components/schemas/Entry" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Entries]
+      summary: Remove an entry from the blocklist
+      description: |
+        Requires `remove`. The entry is kept with status `deleted` for the
+        audit trail, and the blocklist is republished without it.
+      operationId: deleteEntry
+      parameters:
+        - $ref: "#/components/parameters/id"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string }
+      responses:
+        "200":
+          description: The removed entry.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: "#/components/schemas/Entry" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /metrics:
+    get:
+      tags: [Metrics]
+      summary: Impact metrics
+      description: |
+        Requires `view`. The numbers behind the Impact page: time from request
+        to approval, time from approval until a firewall first fetches the
+        updated list, and which firewall clients are polling. Durations are in
+        seconds. Firewall data needs the lists served through feed.php.
+      operationId: getMetrics
+      parameters:
+        - name: days
+          in: query
+          description: Size of the window, ending now.
+          schema: { type: integer, minimum: 1, maximum: 3650, default: 30 }
+      responses:
+        "200":
+          description: Metrics for the window.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: "#/components/schemas/Metrics" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      description: An API key, e.g. `edl_1a2b3c4d5e6f_...`
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+  parameters:
+    id:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, pattern: "^[A-Za-z0-9._-]{1,80}$" }
+    type:
+      name: type
+      in: query
+      schema: { $ref: "#/components/schemas/EntryType" }
+    q:
+      name: q
+      in: query
+      description: Case-insensitive substring of the entry.
+      schema: { type: string }
+    limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 1000, default: 100 }
+    offset:
+      name: offset
+      in: query
+      schema: { type: integer, minimum: 0, default: 0 }
+
+  responses:
+    Error:
+      description: See `error.code` and `error.message`.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    BadRequest:
+      description: "`invalid_json` or `invalid_parameter`."
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Unauthorized:
+      description: Missing, unknown, or revoked API key.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: The key lacks the permission this endpoint needs.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: No such request or entry.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Conflict:
+      description: Already decided, already in the blocklist, or already removed.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    EntryType:
+      type: string
+      enum: [ip, domain, url]
+
+    Priority:
+      type: string
+      enum: [low, medium, high, critical]
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string, examples: [validation_failed, not_found, conflict, unauthorized] }
+            message: { type: string }
+            details:
+              type: array
+              items: { type: string }
+            skipped:
+              type: array
+              items: { $ref: "#/components/schemas/Skipped" }
+
+    Page:
+      type: object
+      required: [data, total, limit, offset]
+      properties:
+        data: { type: array }
+        total: { type: integer, description: Matching records before paging. }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    NewRequests:
+      type: object
+      required: [justification, servicenow_ticket]
+      properties:
+        entry:
+          type: string
+          description: One IP address or CIDR range, domain, or http(s) URL.
+        type:
+          $ref: "#/components/schemas/EntryType"
+        entries:
+          type: array
+          maxItems: 500
+          items:
+            oneOf:
+              - type: string
+              - type: object
+                required: [entry]
+                properties:
+                  entry: { type: string }
+                  type: { $ref: "#/components/schemas/EntryType" }
+        justification: { type: string }
+        servicenow_ticket:
+          type: string
+          pattern: "^(INC|REQ|CHG|RITM|TASK|SCTASK|SIR)[0-9]{7}$"
+        priority:
+          $ref: "#/components/schemas/Priority"
+          default: medium
+        comment: { type: string }
+
+    Skipped:
+      type: object
+      required: [entry, reason]
+      properties:
+        entry: { type: string }
+        reason: { type: string, examples: [Already in the blocklist] }
+
+    Request:
+      type: object
+      required: [id, entry, type, status]
+      properties:
+        id: { type: string }
+        entry: { type: string }
+        type: { $ref: "#/components/schemas/EntryType" }
+        status: { type: string, const: pending }
+        priority: { $ref: "#/components/schemas/Priority" }
+        justification: { type: [string, "null"] }
+        comment: { type: [string, "null"] }
+        servicenow_ticket: { type: [string, "null"] }
+        submitted_by: { type: [string, "null"], description: "API submissions show as api:<key name>." }
+        submitted_at: { type: [string, "null"], format: date-time }
+
+    Entry:
+      type: object
+      required: [id, entry, type, status]
+      properties:
+        id: { type: string }
+        entry: { type: string }
+        type: { $ref: "#/components/schemas/EntryType" }
+        status: { type: string, enum: [active, deleted] }
+        priority: { $ref: "#/components/schemas/Priority" }
+        justification: { type: [string, "null"] }
+        comment: { type: [string, "null"] }
+        servicenow_ticket: { type: [string, "null"] }
+        request_id: { type: [string, "null"] }
+        submitted_by: { type: [string, "null"] }
+        submitted_at: { type: [string, "null"], format: date-time }
+        approved_by: { type: [string, "null"] }
+        approved_at: { type: [string, "null"], format: date-time }
+        approval_comment: { type: [string, "null"] }
+        deleted_by: { type: [string, "null"] }
+        deleted_at: { type: [string, "null"], format: date-time }
+        deletion_reason: { type: [string, "null"] }
+
+    Denial:
+      type: object
+      required: [id, entry, type, status]
+      properties:
+        id: { type: string }
+        entry: { type: string }
+        type: { $ref: "#/components/schemas/EntryType" }
+        status: { type: string, const: denied }
+        priority: { $ref: "#/components/schemas/Priority" }
+        justification: { type: [string, "null"] }
+        comment: { type: [string, "null"] }
+        servicenow_ticket: { type: [string, "null"] }
+        request_id: { type: [string, "null"] }
+        submitted_by: { type: [string, "null"] }
+        submitted_at: { type: [string, "null"], format: date-time }
+        denied_by: { type: [string, "null"] }
+        denied_at: { type: [string, "null"], format: date-time }
+        reason: { type: [string, "null"] }
+
+    DurationStats:
+      type: object
+      required: [count, median_seconds, p90_seconds]
+      properties:
+        count: { type: integer }
+        median_seconds: { type: [integer, "null"] }
+        p90_seconds: { type: [integer, "null"] }
+
+    Metrics:
+      type: object
+      properties:
+        generated_at: { type: string, format: date-time }
+        window:
+          type: object
+          properties:
+            days: { type: integer }
+            from: { type: string, format: date-time }
+            to: { type: string, format: date-time }
+        indicators:
+          type: object
+          properties:
+            active:
+              type: object
+              properties:
+                total: { type: integer }
+                ip: { type: integer }
+                domain: { type: integer }
+                url: { type: integer }
+            added: { type: integer, description: Approved in the window. }
+            removed: { type: integer, description: Removed in the window. }
+        requests:
+          type: object
+          properties:
+            submitted: { type: integer }
+            approved: { type: integer }
+            denied: { type: integer }
+            approval_rate: { type: [number, "null"] }
+            pending: { type: integer, description: Pending now. }
+            oldest_pending_age_seconds: { type: [integer, "null"] }
+        time_to_block:
+          description: Submission to approval, for approvals in the window.
+          allOf:
+            - $ref: "#/components/schemas/DurationStats"
+            - type: object
+              properties:
+                by_priority:
+                  type: object
+                  additionalProperties: { $ref: "#/components/schemas/DurationStats" }
+        time_to_enforcement:
+          description: |
+            Approval until a firewall first fetched a version of the list
+            published at or after the approval. Only approvals made while fetch
+            tracking was running are measured; coverage is the measured share.
+          allOf:
+            - $ref: "#/components/schemas/DurationStats"
+            - type: object
+              properties:
+                coverage: { type: [number, "null"] }
+        request_to_enforcement:
+          $ref: "#/components/schemas/DurationStats"
+        firewalls:
+          type: object
+          properties:
+            tracking: { type: boolean, description: Whether any fetch has been recorded. }
+            total: { type: integer }
+            polling: { type: integer }
+            stale: { type: integer, description: Clients that stopped polling. }
+            clients:
+              type: array
+              items:
+                type: object
+                properties:
+                  ip: { type: string }
+                  user_agent: { type: string }
+                  lists:
+                    type: array
+                    items: { $ref: "#/components/schemas/EntryType" }
+                  first_seen: { type: string, format: date-time }
+                  last_seen: { type: string, format: date-time }
+                  typical_interval_seconds: { type: [integer, "null"] }
+                  stale: { type: boolean }
+        lists:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              entries: { type: [integer, "null"] }
+              published_at: { type: [string, "null"], format: date-time }
+              last_fetch_at: { type: [string, "null"], format: date-time }
+              clients_last_24h: { type: integer }
+              current_version_fetched: { type: boolean }
+        summary:
+          type: array
+          description: Plain-language lines for reports.
+          items: { type: string }

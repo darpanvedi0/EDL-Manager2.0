@@ -22,11 +22,13 @@ EDL Manager provides a secure, enterprise-ready web interface for managing threa
 - **🔄 Real-time EDL Generation**: Automatic blocklist file updates upon approval/denial
 - **🔍 Advanced Search & Filtering**: Comprehensive filtering across all entries
 - **📊 Audit Logging**: Complete activity tracking for compliance and forensics
+- **📈 Impact Metrics**: Time from request to approval, time until firewalls pull the update, and which firewalls are polling
 
 ### 🏢 Enterprise Integrations
 - **🔐 Okta SSO Integration**: Full OIDC/OAuth 2.0 support with group-based role mapping
 - **📱 Microsoft Teams Notifications**: Real-time webhook notifications for security events
 - **🎫 ServiceNow Integration**: Ticket validation and incident tracking
+- **🔌 REST API**: API-key access for SOAR platforms, SIEM playbooks, and scripts, with an OpenAPI 3.1 spec
 - **🛡️ SSL/TLS Configuration**: Built-in certificate management and security hardening
 - **⚡ High Availability**: Designed for enterprise-scale deployments
 
@@ -231,6 +233,11 @@ edl-manager/
 │   ├── auth.php               # Core authentication system
 │   ├── functions.php          # Utility functions
 │   ├── validation.php         # Input validation
+│   ├── edl_lists.php          # Writes the blocklist files
+│   ├── requests.php           # Submit/approve/deny/remove, used by the REST API
+│   ├── api_keys.php           # REST API keys
+│   ├── fetch_stats.php        # Records which clients fetch the lists
+│   ├── metrics.php            # Impact metrics
 │   ├── header.php            # UI header template
 │   ├── footer.php            # UI footer template
 │   ├── okta_auth.php         # Standard Okta SSO integration
@@ -245,6 +252,8 @@ edl-manager/
 │   ├── okta_config.php       # SSO configuration
 │   ├── teams_config.php      # Teams integration setup
 │   ├── ssl_config.php        # SSL/TLS management
+│   ├── api_keys.php          # REST API key management
+│   ├── metrics.php           # Impact metrics and report
 │   └── audit_log.php         # Security audit interface
 ├── 📁 data/                  # Default EDL_DATA_DIR (runtime files are not in git)
 │   ├── .htaccess             # Denies all HTTP access (Apache)
@@ -253,6 +262,8 @@ edl-manager/
 │   ├── pending_requests.json # Pending approval queue
 │   ├── approved_entries.json # Active blocklist entries
 │   ├── denied_entries.json   # Rejected requests
+│   ├── api_keys.json         # API keys (hashed secrets)
+│   ├── fetch_stats.json      # List fetches by client, for the Impact page
 │   └── audit_logs.json       # Complete audit trail
 ├── 📁 edl-files/
 │   ├── ip_blocklist.txt      # IP address blocklist
@@ -264,7 +275,13 @@ edl-manager/
 ├── 📁 okta/                  # SSO callback handlers
 │   ├── login.php            # Okta login initiation
 │   └── callback.php         # OAuth callback handler
-├── 📁 api/                   # JSON endpoints (stats, export, EDL regeneration)
+├── 📁 api/                   # JSON endpoints for the web UI (stats, export, EDL regeneration)
+│   └── 📁 v1/
+│       ├── index.php         # REST API router
+│       └── openapi.yaml      # REST API reference
+├── 📁 tests/
+│   └── run.php               # Unit tests (php tests/run.php)
+├── feed.php                 # Serves the lists to firewalls and records fetches
 ├── user_setup.php           # User account creation (CLI, or admin-only in browser)
 └── index.php                # Main dashboard
 ```
@@ -393,12 +410,78 @@ http://suspicious-domain.net/phishing
 https://blocked-site.org/badcontent
 ```
 
+### 🔌 REST API (v1)
+
+The REST API lets SOAR platforms (Cortex XSOAR, Splunk SOAR, Tines), SIEM playbooks, and scripts use the same approval workflow as the web UI. The full reference is [`api/v1/openapi.yaml`](api/v1/openapi.yaml); OpenAPI-aware tools can import it to generate a client.
+
+**Keys.** An admin creates keys under **Admin → API Keys**, choosing any of `view`, `submit`, `approve`, and `remove`. The token is shown once; only a hash is stored. Send it as `Authorization: Bearer <token>` (or `X-API-Key: <token>`). Anything a key does shows up as `api:<key name>` in the UI and the audit log.
+
+| Method | Path | Permission | Purpose |
+|--------|------|------------|---------|
+| `GET` | `/api/v1/health` | none | Liveness check |
+| `GET` | `/api/v1/requests` | `view` | Pending requests |
+| `POST` | `/api/v1/requests` | `submit` | Submit one `entry` or up to 500 `entries` |
+| `GET` | `/api/v1/requests/{id}` | `view` | Where a request is now: pending, approved, denied, or deleted |
+| `POST` | `/api/v1/requests/{id}/approve` | `approve` | Approve and publish |
+| `POST` | `/api/v1/requests/{id}/deny` | `approve` | Deny (a `reason` is required) |
+| `GET` | `/api/v1/entries` | `view` | Blocklist entries (`?status=active\|deleted\|all&type=&q=`) |
+| `DELETE` | `/api/v1/entries/{id}` | `remove` | Remove an entry from the blocklist |
+| `GET` | `/api/v1/metrics` | `view` | Impact metrics (`?days=30`) |
+
+```bash
+TOKEN=edl_...   # from Admin → API Keys
+curl -X POST https://edl.example.com/api/v1/requests \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"entries": ["198.51.100.7", "evil.example.com"],
+       "justification": "C2 infrastructure from IR-2291",
+       "servicenow_ticket": "SIR0012345", "priority": "high"}'
+```
+
+Entries that are invalid, already blocked, already pending, or previously denied are skipped with a reason in the response; the rest wait for approval like any other request. URLs containing `&`, quotes, or angle brackets are rejected for now, because the web UI stores entries HTML-escaped.
+
+**Routing.** The Docker image routes `/api/v1/*` to the API. On other installs, either use `/api/v1/index.php/requests` style URLs, or add `FallbackResource /api/v1/index.php` inside a `<Directory .../api/v1>` block (Apache) or `location /api/v1/ { try_files $uri /api/v1/index.php$is_args$args; }` (nginx).
+
+## 📈 Impact Metrics
+
+**Impact** in the navigation bar shows, for the last 7, 30, 90, or 365 days:
+
+- **Request → approval**: median and 90th percentile, overall and by priority
+- **Approval → first firewall fetch**: how long until a firewall first downloaded the updated list
+- **Firewall clients**: every address and user agent that fetches the lists, how often each polls, and which ones have stopped polling
+- Request volume, approval rate, pending backlog, and published list sizes
+
+The page opens with a plain-language summary and can be printed or saved as PDF, or downloaded as JSON. The same numbers are at `GET /api/v1/metrics`. The page ends with how each number is measured.
+
+### 📏 Measuring Firewall Fetches
+
+Fetch data comes from `feed.php`, which serves each list and records who fetched which version. The Docker image routes `/edl-files/*.txt` through it, so firewall URLs don't change. On other installs, either point firewalls at `feed.php?list=ip` (or `domain`, `url`), or add a rewrite to the server configuration (adjust the paths if EDL Manager isn't at the web root):
+
+```apache
+# Apache virtual host (mod_rewrite)
+RewriteEngine On
+RewriteRule ^/edl-files/(ip|domain|url)_blocklist\.txt$ /feed.php?list=$1 [PT,L]
+```
+
+```nginx
+# nginx server block
+rewrite ^/edl-files/(ip|domain|url)_blocklist\.txt$ /feed.php?list=$1 last;
+```
+
+Fetches are stored in `fetch_stats.json` in the data directory: client address, user agent, and times, at most one write per client and list per minute. Behind a reverse proxy, every firewall shows the proxy's address, and firewalls sharing a NAT address and user agent count as one client.
+
 ## 🛠️ Development & Debugging
 
 ### 🔍 Debug Mode
 PHP errors are logged, never shown in the browser. To display them while troubleshooting a non-production instance, set `EDL_DEBUG` in `config/config.local.php` (`define('EDL_DEBUG', true);`) or as an environment variable (`fastcgi_param EDL_DEBUG 1;` / `SetEnv EDL_DEBUG 1`). Turn it off again afterwards.
 
 There are no debug or diagnostic pages in the web root; check the web server / PHP-FPM error log instead.
+
+### 🧪 Tests
+```bash
+php tests/run.php                                     # unit tests: requests, API keys, fetch tracking, metrics
+docker build -t edl-manager:dev . && docker/smoke-test.sh edl-manager:dev   # end to end, through Apache
+```
+CI runs both on every pull request.
 
 ### 📂 File Requirements
 - The data directory (`EDL_DATA_DIR`, default `data/`) must be writable by the PHP user and must not be served over HTTP (750)

@@ -2,6 +2,7 @@
 require_once '../config/config.php';
 require_once '../includes/functions.php';
 require_once '../includes/auth.php';
+require_once '../includes/edl_lists.php';
 
 $auth = new EDLAuth();
 $auth->require_auth();
@@ -47,7 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_admin) {
                     // Save updated approved entries JSON
                     if (write_json_file(DATA_DIR . '/approved_entries.json', $approved_entries)) {
                         // Regenerate EDL files (this will exclude deleted entries)
-                        $regenerate_result = regenerate_edl_files();
+                        $regenerate_result = write_edl_lists();
                         
                         // Add audit log
                         append_audit_log([
@@ -60,7 +61,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_admin) {
                             'admin_comment' => "Entry removed from blocklist and marked as deleted"
                         ]);
                         
-                        show_flash("Entry deleted successfully and removed from EDL files. Updated files: IP({$regenerate_result['ip_count']}), Domain({$regenerate_result['domain_count']}), URL({$regenerate_result['url_count']})", 'success');
+                        if ($regenerate_result['written']) {
+                            show_flash("Entry deleted successfully and removed from EDL files. Updated files: IP({$regenerate_result['ip_count']}), Domain({$regenerate_result['domain_count']}), URL({$regenerate_result['url_count']})", 'success');
+                        } else {
+                            show_flash('Entry deleted, but the EDL files could not be rewritten. Check that edl-files/ is writable.', 'warning');
+                        }
                         header('Location: edl_viewer.php');
                         exit;
                     } else {
@@ -123,53 +128,6 @@ foreach ($active_entries as $entry) {
     if (isset($entry['type']) && isset($type_counts[$entry['type']])) {
         $type_counts[$entry['type']]++;
     }
-}
-
-// Helper function to regenerate EDL files
-function regenerate_edl_files() {
-    $approved_entries = read_json_file(DATA_DIR . '/approved_entries.json');
-    $active_entries = array_filter($approved_entries, function($e) {
-        return isset($e['status']) && $e['status'] === 'active';
-    });
-    
-    $ip_list = [];
-    $domain_list = [];
-    $url_list = [];
-    
-    foreach ($active_entries as $entry) {
-        switch ($entry['type'] ?? '') {
-            case 'ip':
-                $ip_list[] = $entry['entry'];
-                break;
-            case 'domain':
-                $domain_list[] = $entry['entry'];
-                break;
-            case 'url':
-                $url_list[] = $entry['entry'];
-                break;
-        }
-    }
-    
-    // Ensure EDL files directory exists
-    if (!is_dir(EDL_FILES_DIR)) {
-        mkdir(EDL_FILES_DIR, 0755, true);
-    }
-    
-    // Write EDL files atomically with error checking
-    $ip_result = write_file_atomic(EDL_FILES_DIR . '/ip_blocklist.txt', implode("\n", $ip_list), 0644);
-    $domain_result = write_file_atomic(EDL_FILES_DIR . '/domain_blocklist.txt', implode("\n", $domain_list), 0644);
-    $url_result = write_file_atomic(EDL_FILES_DIR . '/url_blocklist.txt', implode("\n", $url_list), 0644);
-    
-    if ($ip_result === false || $domain_result === false || $url_result === false) {
-        error_log('Failed to write EDL files in edl_viewer.php');
-    }
-    
-    return [
-        'ip_count' => count($ip_list),
-        'domain_count' => count($domain_list),
-        'url_count' => count($url_list),
-        'total_active' => count($active_entries)
-    ];
 }
 
 // Include the centralized header

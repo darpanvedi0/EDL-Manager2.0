@@ -4,6 +4,11 @@
 // Installed in the image as /usr/local/bin/edl-users. It replaces the web-based
 // user_setup.php, which is left out of the image because it has no authentication.
 
+if (PHP_SAPI !== 'cli') {
+    http_response_code(404);
+    exit;
+}
+
 const ROLES = [
     'admin' => ['name' => 'System Administrator', 'permissions' => ['submit', 'approve', 'view', 'manage', 'audit']],
     'approver' => ['name' => 'Security Approver', 'permissions' => ['approve', 'view']],

@@ -10,7 +10,7 @@ RUN cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
 COPY docker/php/edl-manager.ini "$PHP_INI_DIR/conf.d/zz-edl-manager.ini"
 
 COPY docker/apache/edl-manager.conf /etc/apache2/sites-available/edl-manager.conf
-RUN a2enmod headers \
+RUN a2enmod headers rewrite \
  && a2dissite 000-default \
  && a2disconf serve-cgi-bin other-vhosts-access-log \
  && a2ensite edl-manager \
@@ -38,7 +38,7 @@ EXPOSE 8080
 VOLUME ["/var/lib/edl-manager", "/var/www/html/edl-files"]
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -fsS -o /dev/null http://127.0.0.1:8080/edl-files/ip_blocklist.txt || exit 1
+    CMD curl -fsS -o /dev/null http://127.0.0.1:8080/api/v1/health || exit 1
 
 ENTRYPOINT ["edl-manager-entrypoint"]
 CMD ["apache2-foreground"]

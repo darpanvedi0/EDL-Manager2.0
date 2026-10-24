@@ -66,8 +66,10 @@ foreach ($files as $file => $content) {
 define('SESSION_TIMEOUT', 3600);
 define('CSRF_TOKEN_NAME', 'csrf_token');
 
-// Start session (not needed for command-line scripts such as user_setup.php)
-if (PHP_SAPI !== 'cli' && session_status() === PHP_SESSION_NONE) {
+// Start session (not needed for command-line scripts such as user_setup.php).
+// The REST API and the firewall feed define EDL_NO_SESSION: they authenticate
+// per request, and a session per firewall poll would only pile up files.
+if (PHP_SAPI !== 'cli' && !defined('EDL_NO_SESSION') && session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 ?>
