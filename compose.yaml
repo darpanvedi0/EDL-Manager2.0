@@ -11,7 +11,7 @@ services:
       EDL_SECURE_COOKIES: ${EDL_SECURE_COOKIES:-0}
       TZ: ${TZ:-UTC}
     volumes:
-      - edl-data:/var/www/html/data
+      - edl-data:/var/lib/edl-manager
       - edl-lists:/var/www/html/edl-files
     read_only: true
     tmpfs:

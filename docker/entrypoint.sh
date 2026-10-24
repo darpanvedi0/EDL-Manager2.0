@@ -3,7 +3,7 @@
 # official PHP image's entrypoint.
 set -eu
 
-DATA_DIR="/var/www/html/data"
+DATA_DIR="${EDL_DATA_DIR:-/var/lib/edl-manager}"
 LISTS_DIR="/var/www/html/edl-files"
 
 for dir in "$DATA_DIR" "$LISTS_DIR"; do

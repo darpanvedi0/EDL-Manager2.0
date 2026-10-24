@@ -20,20 +20,22 @@ COPY --chmod=0755 docker/entrypoint.sh /usr/local/bin/edl-manager-entrypoint
 COPY --chmod=0755 docker/edl-users.php /usr/local/bin/edl-users
 
 # Application code stays owned by root; the web server can only write to the
-# two volumes. The base image leaves the web root world-writable.
+# two volumes. Data lives outside the web root. The base image leaves the web
+# root world-writable.
 COPY . /var/www/html/
 RUN chown root:root /var/www/html \
  && chmod 0755 /var/www/html \
  && rm -rf /var/www/html/docker \
  && mkdir -p /usr/share/doc/edl-manager \
  && mv /var/www/html/LICENSE /usr/share/doc/edl-manager/ \
- && mkdir -p /var/www/html/data /var/www/html/edl-files \
- && chown www-data:www-data /var/www/html/data /var/www/html/edl-files \
- && chmod 0750 /var/www/html/data
+ && mkdir -p /var/lib/edl-manager /var/www/html/edl-files \
+ && chown www-data:www-data /var/lib/edl-manager /var/www/html/edl-files \
+ && chmod 0750 /var/lib/edl-manager
 
+ENV EDL_DATA_DIR=/var/lib/edl-manager
 USER www-data
 EXPOSE 8080
-VOLUME ["/var/www/html/data", "/var/www/html/edl-files"]
+VOLUME ["/var/lib/edl-manager", "/var/www/html/edl-files"]
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -fsS -o /dev/null http://127.0.0.1:8080/edl-files/ip_blocklist.txt || exit 1

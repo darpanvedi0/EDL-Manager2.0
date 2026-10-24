@@ -12,7 +12,7 @@ const ROLES = [
 ];
 const MIN_PASSWORD_LENGTH = 12;
 
-$users_file = '/var/www/html/data/users.json';
+$users_file = rtrim(getenv('EDL_DATA_DIR') ?: '/var/lib/edl-manager', '/') . '/users.json';
 
 function fail($message) {
     fwrite(STDERR, "edl-users: $message\n");
