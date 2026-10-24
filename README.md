@@ -40,6 +40,42 @@ EDL Manager provides a secure, enterprise-ready web interface for managing threa
 
 ## 🚀 Quick Start
 
+### 🐳 Run with Docker
+
+The container runs Apache as an unprivileged user on port 8080, on a read-only filesystem, and keeps its data in two volumes.
+
+```bash
+git clone https://github.com/darpanvedi0/EDL-Manager2.0.git
+cd EDL-Manager2.0
+docker compose up -d --build
+docker compose logs edl-manager | grep "Initial admin password"
+```
+
+Open http://localhost:8080 and sign in as `admin` with the password from the logs. To choose it yourself, set `EDL_ADMIN_PASSWORD` (12+ characters) before the first start. Firewalls fetch the lists from `http://<host>:8080/edl-files/ip_blocklist.txt`, `domain_blocklist.txt`, and `url_blocklist.txt`.
+
+**Accounts.** The image leaves out the web-based `user_setup.php`. Manage local accounts with `edl-users` (roles: `admin`, `approver`, `operator`, `viewer`):
+
+```bash
+docker compose exec edl-manager edl-users set-password approver        # prompts for the password
+docker compose exec edl-manager edl-users set-password alice --role=operator
+docker compose exec edl-manager edl-users list
+```
+
+**Settings**
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `EDL_ADMIN_PASSWORD` | generated | Admin password, used only when no accounts exist |
+| `EDL_ADMIN_PASSWORD_FILE` | – | Read the admin password from a file (Docker secrets) |
+| `EDL_SECURE_COOKIES` | `0` | Set to `1` once the UI is served over HTTPS |
+| `TZ` | `UTC` | Time zone for timestamps |
+
+**HTTPS.** The container serves plain HTTP. Put the UI behind a TLS-terminating reverse proxy (nginx, Caddy, or a load balancer) and set `EDL_SECURE_COOKIES=1`. The in-app SSL Configuration page generates config for a web server installed on the host; it doesn't apply to the container.
+
+**Data.** Accounts, requests, and the audit log live in the `edl-data` volume, and the published lists in `edl-lists`; back up both. Bind-mounted host directories must be writable by uid 33 (`www-data`). Sessions are kept in memory, so restarting the container signs everyone out.
+
+**Testing an image.** `docker build -t edl-manager:dev . && docker/smoke-test.sh edl-manager:dev` starts the image with the same hardening and checks the blocklists, blocked paths, login, and the submit → approve → publish flow. CI runs it on every pull request.
+
 ### 📋 Prerequisites
 - **PHP 7.4+** with extensions: `json`, `session`, `filter`, `curl`
 - **Web Server**: Apache/Nginx with `mod_rewrite` enabled

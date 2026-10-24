@@ -1,0 +1,28 @@
+# Version control, CI, and container build files
+.git
+.github
+.gitignore
+.dockerignore
+Dockerfile
+compose.yaml
+
+# Documentation is not served
+**/*.md
+SSL Cert Install.txt
+
+# Runtime state belongs in volumes, never in the image
+data/
+edl-files/
+backups/
+**/*.log
+
+# Setup and diagnostic scripts with no authentication
+setup.php
+user_setup.php
+test_index.php
+debug*.php
+
+# Editor files
+.vscode/
+.idea/
+**/*.swp
