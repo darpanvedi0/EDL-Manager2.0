@@ -75,18 +75,23 @@ users="$(docker exec "$name" edl-users list)"
 [[ "$(wc -l <<<"$users")" == 1 && "$users" == admin* ]] && pass "only the admin account exists" || fail "unexpected accounts: $users"
 
 echo "== Login"
+form_value() { grep -o "name=\"$1\" value=\"[^\"]*\"" | head -1 | sed 's/.*value="//; s/"$//'; }
+login() {
+    curl -s -c "$jar" -b "$jar" -o /dev/null -w '%{http_code} %{redirect_url}' \
+        --data-urlencode username=admin --data-urlencode "password=$1" --data-urlencode "csrf_token=$2" "$base/login.php"
+}
 expect_status 302 /index.php
-got="$(curl -s -c "$jar" -b "$jar" -o /dev/null -w '%{http_code} %{redirect_url}' \
-    --data-urlencode username=admin --data-urlencode "password=wrong-password" "$base/login.php")"
+token="$(curl -s -c "$jar" -b "$jar" "$base/login.php" | form_value csrf_token)"
+got="$(login "$password" "")"
+[[ "$got" == "200 " ]] && pass "login without a CSRF token is rejected" || fail "login without CSRF token -> $got"
+got="$(login wrong-password "$token")"
 [[ "$got" == "200 " ]] && pass "wrong password is rejected" || fail "wrong password -> $got"
-got="$(curl -s -c "$jar" -b "$jar" -o /dev/null -w '%{http_code} %{redirect_url}' \
-    --data-urlencode username=admin --data-urlencode "password=$password" "$base/login.php")"
+got="$(login "$password" "$token")"
 [[ "$got" == "302 $base/index.php" ]] && pass "admin login redirects to the dashboard" || fail "admin login -> $got"
 got="$(curl -s -c "$jar" -b "$jar" -o /dev/null -w '%{http_code}' "$base/index.php")"
 [[ "$got" == 200 ]] && pass "dashboard loads after login" || fail "dashboard -> $got"
 
 echo "== Submit, approve, publish"
-form_value() { grep -o "name=\"$1\" value=\"[^\"]*\"" | head -1 | sed 's/.*value="//; s/"$//'; }
 token="$(curl -s -c "$jar" -b "$jar" "$base/pages/submit_request.php" | form_value csrf_token)"
 curl -s -c "$jar" -b "$jar" -o /dev/null --data-urlencode "csrf_token=$token" \
     -d submission_type=individual -d entry=203.0.113.25 -d type=ip -d priority=high \
