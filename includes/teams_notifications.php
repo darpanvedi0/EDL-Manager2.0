@@ -342,7 +342,7 @@ function send_teams_webhook($webhook_url, $message) {
  * Log Teams notification attempts
  */
 function log_teams_notification($event_type, $request_data, $result, $additional_data = []) {
-    if (!function_exists('read_json_file') || !function_exists('write_json_file')) {
+    if (!function_exists('update_json_file')) {
         return false;
     }
     
@@ -363,15 +363,16 @@ function log_teams_notification($event_type, $request_data, $result, $additional
         $log_entry['bulk_summary'] = $request_data['bulk_summary'] ?? $additional_data['type_summary'] ?? '';
     }
     
-    $teams_logs = read_json_file(DATA_DIR . '/teams_logs.json');
-    $teams_logs[] = $log_entry;
-    
-    // Keep only last 100 logs
-    if (count($teams_logs) > 100) {
-        $teams_logs = array_slice($teams_logs, -100);
-    }
-    
-    return write_json_file(DATA_DIR . '/teams_logs.json', $teams_logs);
+    return update_json_file(DATA_DIR . '/teams_logs.json', function ($teams_logs) use ($log_entry) {
+        $teams_logs[] = $log_entry;
+        
+        // Keep only last 100 logs
+        if (count($teams_logs) > 100) {
+            $teams_logs = array_slice($teams_logs, -100);
+        }
+        
+        return $teams_logs;
+    });
 }
 
 /**

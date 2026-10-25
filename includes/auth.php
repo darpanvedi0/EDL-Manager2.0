@@ -9,45 +9,8 @@ class EDLAuth {
             require_once dirname(__FILE__) . '/functions.php';
         }
         
+        // Local accounts are created with user_setup.php; no defaults ship in code.
         $this->users_file = DATA_DIR . '/users.json';
-        $this->init_users();
-    }
-    
-    private function init_users() {
-        if (!file_exists($this->users_file)) {
-            $default_users = [
-                'admin' => [
-                    'password' => '$2a$12$2NYBgFYaLKinqcdxS4l7xuoq5yxGkDB9pDRR0u1xg5GgHhJcSoLTK',
-                    'name' => 'System Administrator',
-                    'email' => 'admin@company.com',
-                    'role' => 'admin',
-                    'permissions' => ['submit', 'approve', 'view', 'manage', 'audit']
-                ],
-                'approver' => [
-                    'password' => '$2a$12$5rKDqsbdZLe8t82K.weTnOtwDFtkOf/gp3yyWf7fF.p38l0SKVrOK',
-                    'name' => 'Security Approver',
-                    'email' => 'approver@company.com',
-                    'role' => 'approver',
-                    'permissions' => ['approve', 'view']
-                ],
-                'operator' => [
-                    'password' => '$2a$12$3Vqfxz27vp98UviY152seuMM/bd8X4FYqEBkVIKwudVQq7UtN17R.',
-                    'name' => 'EDL Operator',
-                    'email' => 'operator@company.com',
-                    'role' => 'operator',
-                    'permissions' => ['submit', 'view']
-                ],
-                'viewer' => [
-                    'password' => '$2a$12$K5s4dGj6w6D9zQy0jLm3HeK.f9Y7zD3MKL4.5k8N2mR7vT8qA9cBu',
-                    'name' => 'EDL Viewer',
-                    'email' => 'viewer@company.com',
-                    'role' => 'viewer',
-                    'permissions' => ['view']
-                ]
-            ];
-            
-            $this->save_users($default_users);
-        }
     }
     
     public function authenticate($username, $password) {
@@ -65,6 +28,9 @@ class EDLAuth {
         if (!password_verify($password, $user['password'])) {
             return false;
         }
+        
+        // New session ID for the logged-in session (prevents session fixation)
+        regenerate_session_on_login();
         
         // Set LOCAL authentication session
         $_SESSION['authenticated'] = true;
@@ -218,18 +184,6 @@ class EDLAuth {
                 return $content ? json_decode($content, true) : [];
             }
             return [];
-        }
-    }
-    
-    private function save_users($users) {
-        if (function_exists('write_json_file')) {
-            return write_json_file($this->users_file, $users);
-        } else {
-            $dir = dirname($this->users_file);
-            if (!is_dir($dir)) {
-                mkdir($dir, 0755, true);
-            }
-            return file_put_contents($this->users_file, json_encode($users, JSON_PRETTY_PRINT));
         }
     }
 }

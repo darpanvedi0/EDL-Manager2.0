@@ -1,0 +1,10 @@
+{
+    "error": {
+        "code": "validation_failed",
+        "message": "justification is required; servicenow_ticket is required, in a format like INC1234567, REQ1234567, CHG1234567, or SIR1234567",
+        "details": [
+            "justification is required",
+            "servicenow_ticket is required, in a format like INC1234567, REQ1234567, CHG1234567, or SIR1234567"
+        ]
+    }
+}

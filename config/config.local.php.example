@@ -1,0 +1,11 @@
+<?php
+// Copy this file to config/config.local.php and adjust it for your site.
+// config.local.php is ignored by git. Environment variables with the same
+// names (EDL_DATA_DIR, EDL_DEBUG) work too; constants defined here win.
+
+// Store data outside the web root so it can never be downloaded over HTTP.
+// The directory must be writable by the PHP user (e.g. www-data).
+define('EDL_DATA_DIR', '/var/lib/edl-manager');
+
+// Show PHP errors in the browser. Leave this off in production.
+define('EDL_DEBUG', false);

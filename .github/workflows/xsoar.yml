@@ -1,0 +1,50 @@
+name: XSOAR pack
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # CommonServerPython, demistomock, the pytest conftest, and the ruff
+      # config the pack must pass in demisto/content. Pinned so upstream
+      # changes can't break CI without a deliberate bump.
+      - name: Check out demisto/content
+        uses: actions/checkout@v4
+        with:
+          repository: demisto/content
+          ref: c884e7014cb9b6f85ab6c2c402148e87c2d641d4
+          path: content
+          persist-credentials: false
+          sparse-checkout: |
+            Packs/Base/Scripts/CommonServerPython
+            Packs/ApiModules/Scripts/DemistoClassApiModule
+            Tests/demistomock
+            Tests/scripts/dev_envs/pytest
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Lint
+        run: |
+          pip install ruff==0.8.6
+          ruff check --config content/pyproject.toml integrations/xsoar/
+          ruff format --check --config content/pyproject.toml integrations/xsoar/
+
+      - name: Unit tests in the XSOAR runtime image
+        run: integrations/xsoar/run-tests.sh content
+
+      - name: Build EDL Manager
+        run: docker build -t edl-manager:e2e .
+
+      - name: Every command against a live EDL Manager
+        run: integrations/xsoar/e2e.sh edl-manager:e2e content

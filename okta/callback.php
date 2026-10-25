@@ -3,8 +3,6 @@
 require_once '../config/config.php';
 require_once '../includes/functions.php';
 
-session_start();
-
 try {
     $code = $_GET['code'] ?? '';
     $state = $_GET['state'] ?? '';

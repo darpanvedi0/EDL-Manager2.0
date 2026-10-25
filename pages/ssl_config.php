@@ -73,16 +73,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     generateWebServerConfigs($ssl_config);
                     
                     // Add audit log
-                    $audit_logs = read_json_file(DATA_DIR . '/audit_logs.json');
-                    $audit_logs[] = [
+                    append_audit_log([
                         'id' => uniqid('audit_', true),
                         'timestamp' => date('c'),
                         'action' => 'ssl_config_update',
                         'entry' => 'SSL/TLS Configuration',
                         'user' => $_SESSION['username'],
                         'details' => 'Updated SSL/TLS configuration - Enabled: ' . ($ssl_config['enabled'] ? 'Yes' : 'No')
-                    ];
-                    write_json_file(DATA_DIR . '/audit_logs.json', $audit_logs);
+                    ]);
                     
                     header('Location: ssl_config.php');
                     exit;
@@ -170,6 +168,18 @@ if (isset($_GET['download'])) {
             $filename = 'edl-manager.key';
             $content_type = 'application/x-pem-file';
             break;
+        // Generated web server configs (data/ is not reachable over HTTP)
+        case 'apache':
+        case 'nginx':
+            $file_path = DATA_DIR . '/webserver_configs/' . $file_type . '_ssl.conf';
+            $filename = $file_type . '_ssl.conf';
+            $content_type = 'text/plain';
+            break;
+        case 'htaccess':
+            $file_path = DATA_DIR . '/webserver_configs/.htaccess';
+            $filename = 'edl-manager.htaccess';
+            $content_type = 'text/plain';
+            break;
         default:
             $error_message = 'Invalid file type requested.';
             break;
@@ -185,8 +195,10 @@ if (isset($_GET['download'])) {
         
         readfile($file_path);
         exit;
-    } else {
-        $error_message = 'File not found. Please generate CSR first.';
+    } elseif (isset($file_path)) {
+        $error_message = in_array($file_type, ['csr', 'key'])
+            ? 'File not found. Please generate CSR first.'
+            : 'File not found. Please save the SSL configuration first.';
     }
 }
 
@@ -393,16 +405,14 @@ function handleCertificateUpload() {
     }
     
     // Log the upload
-    $audit_logs = read_json_file(DATA_DIR . '/audit_logs.json');
-    $audit_logs[] = [
+    append_audit_log([
         'id' => uniqid('audit_', true),
         'timestamp' => date('c'),
         'action' => 'certificate_upload',
         'entry' => 'SSL Certificate Upload',
         'user' => $_SESSION['username'],
         'details' => 'Uploaded: ' . implode(', ', $uploaded_files)
-    ];
-    write_json_file(DATA_DIR . '/audit_logs.json', $audit_logs);
+    ]);
     
     return ['success' => true, 'message' => 'Successfully uploaded: ' . implode(', ', $uploaded_files)];
 }
@@ -1360,7 +1370,7 @@ function downloadConfig(type) {
     
     // Create a link to download the configuration file
     const link = document.createElement('a');
-    link.href = '../data/webserver_configs/' + type + (type === 'htaccess' ? '' : '_ssl') + (type === 'htaccess' ? '.htaccess' : '.conf');
+    link.href = 'ssl_config.php?download=' + encodeURIComponent(type);
     link.download = type + (type === 'htaccess' ? '.htaccess' : '_ssl.conf');
     link.style.display = 'none';
     document.body.appendChild(link);

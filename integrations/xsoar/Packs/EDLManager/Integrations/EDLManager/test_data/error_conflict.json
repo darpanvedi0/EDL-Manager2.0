@@ -1,0 +1,6 @@
+{
+    "error": {
+        "code": "conflict",
+        "message": "Request was already deleted"
+    }
+}

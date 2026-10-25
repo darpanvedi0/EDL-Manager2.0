@@ -17,6 +17,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_admin) {
     if (!validate_csrf_token($_POST['csrf_token'] ?? '')) {
         $error_message = 'Invalid security token. Please try again.';
     } else {
+        // Lock so concurrent changes to the denied list can't overwrite each other
+        acquire_data_lock();
+        
         $action = sanitize_input($_POST['action'] ?? '');
         
         if ($action === 'remove_denial') {
@@ -31,8 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_admin) {
                         $removed_entry = $entry;
                         
                         // Add audit log before removal
-                        $audit_logs = read_json_file(DATA_DIR . '/audit_logs.json');
-                        $audit_logs[] = [
+                        append_audit_log([
                             'id' => uniqid('audit_', true),
                             'timestamp' => date('c'),
                             'action' => 'remove_denial',
@@ -40,8 +42,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_admin) {
                             'user' => $_SESSION['username'],
                             'details' => "Removed {$entry['type']} from denied list",
                             'admin_comment' => "Previously denied: " . ($entry['reason'] ?? 'No reason')
-                        ];
-                        write_json_file(DATA_DIR . '/audit_logs.json', $audit_logs);
+                        ]);
                         
                         // Remove the entry from array
                         unset($denied_entries[$key]);
@@ -114,8 +115,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_admin) {
                     
                     if (write_json_file(DATA_DIR . '/denied_entries.json', $denied_entries)) {
                         // Add audit log
-                        $audit_logs = read_json_file(DATA_DIR . '/audit_logs.json');
-                        $audit_logs[] = [
+                        append_audit_log([
                             'id' => uniqid('audit_', true),
                             'timestamp' => date('c'),
                             'action' => 'manual_denial',
@@ -123,8 +123,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_admin) {
                             'user' => $_SESSION['username'],
                             'details' => "Manually added {$type} to denied list",
                             'admin_comment' => $reason
-                        ];
-                        write_json_file(DATA_DIR . '/audit_logs.json', $audit_logs);
+                        ]);
                         
                         show_flash("Entry '{$entry}' added to denied list successfully.", 'success');
                         header('Location: denied_entries.php');
@@ -139,6 +138,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_admin) {
                 $error_message = implode(', ', $errors);
             }
         }
+        
+        release_data_lock();
     }
 }
 

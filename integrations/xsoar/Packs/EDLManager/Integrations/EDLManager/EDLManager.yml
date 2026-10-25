@@ -1,0 +1,670 @@
+category: Network Security
+sectionorder:
+- Connect
+commonfields:
+  id: EDLManager
+  version: -1
+configuration:
+- display: Server URL (e.g., https://edl.example.com)
+  name: url
+  required: true
+  type: 0
+  section: Connect
+- displaypassword: API Key
+  name: credentials
+  required: true
+  type: 9
+  hiddenusername: true
+  section: Connect
+  additionalinfo: 'Create the key in EDL Manager on the API Keys page of the Admin menu. Give it the permissions the commands you use need: view, submit, approve, remove.'
+- display: API path
+  name: api_path
+  defaultvalue: /api/v1
+  type: 0
+  section: Connect
+  advanced: true
+  required: false
+  additionalinfo: Use /api/v1/index.php if the web server doesn't route /api/v1/* to the API.
+- display: Trust any certificate (not secure)
+  name: insecure
+  type: 8
+  section: Connect
+  advanced: true
+  required: false
+- display: Use system proxy settings
+  name: proxy
+  type: 8
+  section: Connect
+  advanced: true
+  required: false
+description: Submit IP addresses, domains, and URLs for approval in EDL Manager and track them until they are published to the External Dynamic Lists your firewalls fetch.
+display: EDL Manager
+name: EDLManager
+script:
+  commands:
+  - name: edl-manager-request-submit
+    description: Submits entries for approval. Once approved, each entry is published to the blocklist for its type. Entries that are invalid, already blocked, already pending, or previously denied are skipped and listed with the reason. Entries containing & < > " or ' are not supported. The API key needs the submit permission.
+    execution: true
+    arguments:
+    - name: entries
+      required: true
+      isArray: true
+      description: IP addresses, CIDR ranges, domains, or http(s) URLs to block, comma-separated. Up to 500.
+    - name: type
+      description: The type of every entry. When not set, the type of each entry is detected.
+      auto: PREDEFINED
+      predefined:
+      - ip
+      - domain
+      - url
+    - name: justification
+      required: true
+      description: Why the entries should be blocked.
+    - name: servicenow_ticket
+      required: true
+      description: 'The ServiceNow ticket for the request: INC, REQ, CHG, RITM, TASK, SCTASK, or SIR followed by 7 digits, for example SIR0012345.'
+    - name: priority
+      description: The request priority.
+      auto: PREDEFINED
+      predefined:
+      - low
+      - medium
+      - high
+      - critical
+      defaultValue: medium
+    - name: comment
+      description: An additional comment for the approver.
+    outputs:
+    - contextPath: EDLManager.Request.ID
+      description: The request ID.
+      type: String
+    - contextPath: EDLManager.Request.Entry
+      description: The IP address, CIDR range, domain, or URL.
+      type: String
+    - contextPath: EDLManager.Request.Type
+      description: 'The entry type: ip, domain, or url.'
+      type: String
+    - contextPath: EDLManager.Request.Status
+      description: 'Where the request is now: pending, approved, denied, or deleted (approved, then removed from the blocklist).'
+      type: String
+    - contextPath: EDLManager.Request.Priority
+      description: 'The priority: low, medium, high, or critical.'
+      type: String
+    - contextPath: EDLManager.Request.Justification
+      description: Why the entry should be blocked.
+      type: String
+    - contextPath: EDLManager.Request.Comment
+      description: An additional comment from the submitter.
+      type: String
+    - contextPath: EDLManager.Request.ServiceNowTicket
+      description: The ServiceNow ticket for the request.
+      type: String
+    - contextPath: EDLManager.Request.SubmittedBy
+      description: Who submitted the request. Submissions through the API show as api:<key name>.
+      type: String
+    - contextPath: EDLManager.Request.SubmittedAt
+      description: When the request was submitted.
+      type: Date
+    - contextPath: EDLManager.SkippedEntry.Entry
+      description: An entry that was not submitted.
+      type: String
+    - contextPath: EDLManager.SkippedEntry.Reason
+      description: Why it was not submitted, for example "Already in the blocklist".
+      type: String
+  - name: edl-manager-request-get
+    description: 'Gets a request and where it is now: pending, approved, denied, or deleted (approved, then removed). Use it to poll for the approver''s decision. The API key needs the view permission.'
+    arguments:
+    - name: request_id
+      required: true
+      description: The request ID.
+    outputs:
+    - contextPath: EDLManager.Request.ID
+      description: The request ID.
+      type: String
+    - contextPath: EDLManager.Request.Entry
+      description: The IP address, CIDR range, domain, or URL.
+      type: String
+    - contextPath: EDLManager.Request.Type
+      description: 'The entry type: ip, domain, or url.'
+      type: String
+    - contextPath: EDLManager.Request.Status
+      description: 'Where the request is now: pending, approved, denied, or deleted (approved, then removed from the blocklist).'
+      type: String
+    - contextPath: EDLManager.Request.Priority
+      description: 'The priority: low, medium, high, or critical.'
+      type: String
+    - contextPath: EDLManager.Request.Justification
+      description: Why the entry should be blocked.
+      type: String
+    - contextPath: EDLManager.Request.Comment
+      description: An additional comment from the submitter.
+      type: String
+    - contextPath: EDLManager.Request.ServiceNowTicket
+      description: The ServiceNow ticket for the request.
+      type: String
+    - contextPath: EDLManager.Request.SubmittedBy
+      description: Who submitted the request. Submissions through the API show as api:<key name>.
+      type: String
+    - contextPath: EDLManager.Request.SubmittedAt
+      description: When the request was submitted.
+      type: Date
+    - contextPath: EDLManager.Request.EntryID
+      description: The blocklist entry ID, once the request is approved.
+      type: String
+    - contextPath: EDLManager.Request.ApprovedBy
+      description: Who approved the request.
+      type: String
+    - contextPath: EDLManager.Request.ApprovedAt
+      description: When the request was approved.
+      type: Date
+    - contextPath: EDLManager.Request.ApprovalComment
+      description: The approver's comment.
+      type: String
+    - contextPath: EDLManager.Request.DeniedBy
+      description: Who denied the request.
+      type: String
+    - contextPath: EDLManager.Request.DeniedAt
+      description: When the request was denied.
+      type: Date
+    - contextPath: EDLManager.Request.Reason
+      description: Why the request was denied.
+      type: String
+    - contextPath: EDLManager.Request.DeletedBy
+      description: Who removed the approved entry from the blocklist.
+      type: String
+    - contextPath: EDLManager.Request.DeletedAt
+      description: When the approved entry was removed from the blocklist.
+      type: Date
+    - contextPath: EDLManager.Request.DeletionReason
+      description: Why the approved entry was removed.
+      type: String
+  - name: edl-manager-request-list
+    description: Lists pending requests, newest first. The API key needs the view permission.
+    arguments:
+    - name: type
+      description: Only requests of this type.
+      auto: PREDEFINED
+      predefined:
+      - ip
+      - domain
+      - url
+    - &id001
+      name: query
+      description: Only entries containing this text (case-insensitive).
+    - &id002
+      name: limit
+      description: The maximum number of results, 1-1000.
+      defaultValue: '50'
+    - &id003
+      name: offset
+      description: How many results to skip, for paging.
+      defaultValue: '0'
+    outputs:
+    - contextPath: EDLManager.Request.ID
+      description: The request ID.
+      type: String
+    - contextPath: EDLManager.Request.Entry
+      description: The IP address, CIDR range, domain, or URL.
+      type: String
+    - contextPath: EDLManager.Request.Type
+      description: 'The entry type: ip, domain, or url.'
+      type: String
+    - contextPath: EDLManager.Request.Status
+      description: 'Where the request is now: pending, approved, denied, or deleted (approved, then removed from the blocklist).'
+      type: String
+    - contextPath: EDLManager.Request.Priority
+      description: 'The priority: low, medium, high, or critical.'
+      type: String
+    - contextPath: EDLManager.Request.Justification
+      description: Why the entry should be blocked.
+      type: String
+    - contextPath: EDLManager.Request.Comment
+      description: An additional comment from the submitter.
+      type: String
+    - contextPath: EDLManager.Request.ServiceNowTicket
+      description: The ServiceNow ticket for the request.
+      type: String
+    - contextPath: EDLManager.Request.SubmittedBy
+      description: Who submitted the request. Submissions through the API show as api:<key name>.
+      type: String
+    - contextPath: EDLManager.Request.SubmittedAt
+      description: When the request was submitted.
+      type: Date
+  - name: edl-manager-request-approve
+    description: Approves a pending request and publishes the entry to its blocklist. The API key needs the approve permission.
+    execution: true
+    arguments:
+    - name: request_id
+      required: true
+      description: The request ID.
+    - name: comment
+      description: A comment recorded with the approval.
+    outputs:
+    - contextPath: EDLManager.Entry.ID
+      description: The blocklist entry ID.
+      type: String
+    - contextPath: EDLManager.Entry.Entry
+      description: The IP address, CIDR range, domain, or URL.
+      type: String
+    - contextPath: EDLManager.Entry.Type
+      description: 'The entry type: ip, domain, or url.'
+      type: String
+    - contextPath: EDLManager.Entry.Status
+      description: active, or deleted if it was removed from the blocklist.
+      type: String
+    - contextPath: EDLManager.Entry.Priority
+      description: 'The priority: low, medium, high, or critical.'
+      type: String
+    - contextPath: EDLManager.Entry.Justification
+      description: Why the entry is blocked.
+      type: String
+    - contextPath: EDLManager.Entry.Comment
+      description: An additional comment from the submitter.
+      type: String
+    - contextPath: EDLManager.Entry.ServiceNowTicket
+      description: The ServiceNow ticket for the request.
+      type: String
+    - contextPath: EDLManager.Entry.RequestID
+      description: The ID of the request that added the entry.
+      type: String
+    - contextPath: EDLManager.Entry.SubmittedBy
+      description: Who submitted the request.
+      type: String
+    - contextPath: EDLManager.Entry.SubmittedAt
+      description: When the request was submitted.
+      type: Date
+    - contextPath: EDLManager.Entry.ApprovedBy
+      description: Who approved the request.
+      type: String
+    - contextPath: EDLManager.Entry.ApprovedAt
+      description: When the entry was approved and published.
+      type: Date
+    - contextPath: EDLManager.Entry.ApprovalComment
+      description: The approver's comment.
+      type: String
+    - contextPath: EDLManager.Entry.DeletedBy
+      description: Who removed the entry from the blocklist.
+      type: String
+    - contextPath: EDLManager.Entry.DeletedAt
+      description: When the entry was removed from the blocklist.
+      type: Date
+    - contextPath: EDLManager.Entry.DeletionReason
+      description: Why the entry was removed.
+      type: String
+  - name: edl-manager-request-deny
+    description: Denies a pending request. The API key needs the approve permission.
+    execution: true
+    arguments:
+    - name: request_id
+      required: true
+      description: The request ID.
+    - name: reason
+      required: true
+      description: Why the request is denied.
+    outputs:
+    - contextPath: EDLManager.Request.ID
+      description: The request ID.
+      type: String
+    - contextPath: EDLManager.Request.Entry
+      description: The IP address, CIDR range, domain, or URL.
+      type: String
+    - contextPath: EDLManager.Request.Type
+      description: 'The entry type: ip, domain, or url.'
+      type: String
+    - contextPath: EDLManager.Request.Status
+      description: 'Where the request is now: pending, approved, denied, or deleted (approved, then removed from the blocklist).'
+      type: String
+    - contextPath: EDLManager.Request.Priority
+      description: 'The priority: low, medium, high, or critical.'
+      type: String
+    - contextPath: EDLManager.Request.Justification
+      description: Why the entry should be blocked.
+      type: String
+    - contextPath: EDLManager.Request.Comment
+      description: An additional comment from the submitter.
+      type: String
+    - contextPath: EDLManager.Request.ServiceNowTicket
+      description: The ServiceNow ticket for the request.
+      type: String
+    - contextPath: EDLManager.Request.SubmittedBy
+      description: Who submitted the request. Submissions through the API show as api:<key name>.
+      type: String
+    - contextPath: EDLManager.Request.SubmittedAt
+      description: When the request was submitted.
+      type: Date
+    - contextPath: EDLManager.Request.DeniedBy
+      description: Who denied the request.
+      type: String
+    - contextPath: EDLManager.Request.DeniedAt
+      description: When the request was denied.
+      type: Date
+    - contextPath: EDLManager.Request.Reason
+      description: Why the request was denied.
+      type: String
+  - name: edl-manager-entry-list
+    description: Lists blocklist entries, newest first. The API key needs the view permission.
+    arguments:
+    - name: status
+      description: active entries, deleted (removed) entries, or all.
+      auto: PREDEFINED
+      predefined:
+      - active
+      - deleted
+      - all
+      defaultValue: active
+    - name: type
+      description: Only entries of this type.
+      auto: PREDEFINED
+      predefined:
+      - ip
+      - domain
+      - url
+    - *id001
+    - *id002
+    - *id003
+    outputs:
+    - contextPath: EDLManager.Entry.ID
+      description: The blocklist entry ID.
+      type: String
+    - contextPath: EDLManager.Entry.Entry
+      description: The IP address, CIDR range, domain, or URL.
+      type: String
+    - contextPath: EDLManager.Entry.Type
+      description: 'The entry type: ip, domain, or url.'
+      type: String
+    - contextPath: EDLManager.Entry.Status
+      description: active, or deleted if it was removed from the blocklist.
+      type: String
+    - contextPath: EDLManager.Entry.Priority
+      description: 'The priority: low, medium, high, or critical.'
+      type: String
+    - contextPath: EDLManager.Entry.Justification
+      description: Why the entry is blocked.
+      type: String
+    - contextPath: EDLManager.Entry.Comment
+      description: An additional comment from the submitter.
+      type: String
+    - contextPath: EDLManager.Entry.ServiceNowTicket
+      description: The ServiceNow ticket for the request.
+      type: String
+    - contextPath: EDLManager.Entry.RequestID
+      description: The ID of the request that added the entry.
+      type: String
+    - contextPath: EDLManager.Entry.SubmittedBy
+      description: Who submitted the request.
+      type: String
+    - contextPath: EDLManager.Entry.SubmittedAt
+      description: When the request was submitted.
+      type: Date
+    - contextPath: EDLManager.Entry.ApprovedBy
+      description: Who approved the request.
+      type: String
+    - contextPath: EDLManager.Entry.ApprovedAt
+      description: When the entry was approved and published.
+      type: Date
+    - contextPath: EDLManager.Entry.ApprovalComment
+      description: The approver's comment.
+      type: String
+    - contextPath: EDLManager.Entry.DeletedBy
+      description: Who removed the entry from the blocklist.
+      type: String
+    - contextPath: EDLManager.Entry.DeletedAt
+      description: When the entry was removed from the blocklist.
+      type: Date
+    - contextPath: EDLManager.Entry.DeletionReason
+      description: Why the entry was removed.
+      type: String
+  - name: edl-manager-entry-get
+    description: Gets a blocklist entry. The API key needs the view permission.
+    arguments:
+    - name: entry_id
+      required: true
+      description: The blocklist entry ID.
+    outputs:
+    - contextPath: EDLManager.Entry.ID
+      description: The blocklist entry ID.
+      type: String
+    - contextPath: EDLManager.Entry.Entry
+      description: The IP address, CIDR range, domain, or URL.
+      type: String
+    - contextPath: EDLManager.Entry.Type
+      description: 'The entry type: ip, domain, or url.'
+      type: String
+    - contextPath: EDLManager.Entry.Status
+      description: active, or deleted if it was removed from the blocklist.
+      type: String
+    - contextPath: EDLManager.Entry.Priority
+      description: 'The priority: low, medium, high, or critical.'
+      type: String
+    - contextPath: EDLManager.Entry.Justification
+      description: Why the entry is blocked.
+      type: String
+    - contextPath: EDLManager.Entry.Comment
+      description: An additional comment from the submitter.
+      type: String
+    - contextPath: EDLManager.Entry.ServiceNowTicket
+      description: The ServiceNow ticket for the request.
+      type: String
+    - contextPath: EDLManager.Entry.RequestID
+      description: The ID of the request that added the entry.
+      type: String
+    - contextPath: EDLManager.Entry.SubmittedBy
+      description: Who submitted the request.
+      type: String
+    - contextPath: EDLManager.Entry.SubmittedAt
+      description: When the request was submitted.
+      type: Date
+    - contextPath: EDLManager.Entry.ApprovedBy
+      description: Who approved the request.
+      type: String
+    - contextPath: EDLManager.Entry.ApprovedAt
+      description: When the entry was approved and published.
+      type: Date
+    - contextPath: EDLManager.Entry.ApprovalComment
+      description: The approver's comment.
+      type: String
+    - contextPath: EDLManager.Entry.DeletedBy
+      description: Who removed the entry from the blocklist.
+      type: String
+    - contextPath: EDLManager.Entry.DeletedAt
+      description: When the entry was removed from the blocklist.
+      type: Date
+    - contextPath: EDLManager.Entry.DeletionReason
+      description: Why the entry was removed.
+      type: String
+  - name: edl-manager-entry-remove
+    description: Removes an entry from the blocklist and republishes the list. The record is kept with status deleted. The API key needs the remove permission.
+    execution: true
+    arguments:
+    - name: entry_id
+      required: true
+      description: The blocklist entry ID.
+    - name: reason
+      description: Why the entry is removed.
+    outputs:
+    - contextPath: EDLManager.Entry.ID
+      description: The blocklist entry ID.
+      type: String
+    - contextPath: EDLManager.Entry.Entry
+      description: The IP address, CIDR range, domain, or URL.
+      type: String
+    - contextPath: EDLManager.Entry.Type
+      description: 'The entry type: ip, domain, or url.'
+      type: String
+    - contextPath: EDLManager.Entry.Status
+      description: active, or deleted if it was removed from the blocklist.
+      type: String
+    - contextPath: EDLManager.Entry.Priority
+      description: 'The priority: low, medium, high, or critical.'
+      type: String
+    - contextPath: EDLManager.Entry.Justification
+      description: Why the entry is blocked.
+      type: String
+    - contextPath: EDLManager.Entry.Comment
+      description: An additional comment from the submitter.
+      type: String
+    - contextPath: EDLManager.Entry.ServiceNowTicket
+      description: The ServiceNow ticket for the request.
+      type: String
+    - contextPath: EDLManager.Entry.RequestID
+      description: The ID of the request that added the entry.
+      type: String
+    - contextPath: EDLManager.Entry.SubmittedBy
+      description: Who submitted the request.
+      type: String
+    - contextPath: EDLManager.Entry.SubmittedAt
+      description: When the request was submitted.
+      type: Date
+    - contextPath: EDLManager.Entry.ApprovedBy
+      description: Who approved the request.
+      type: String
+    - contextPath: EDLManager.Entry.ApprovedAt
+      description: When the entry was approved and published.
+      type: Date
+    - contextPath: EDLManager.Entry.ApprovalComment
+      description: The approver's comment.
+      type: String
+    - contextPath: EDLManager.Entry.DeletedBy
+      description: Who removed the entry from the blocklist.
+      type: String
+    - contextPath: EDLManager.Entry.DeletedAt
+      description: When the entry was removed from the blocklist.
+      type: Date
+    - contextPath: EDLManager.Entry.DeletionReason
+      description: Why the entry was removed.
+      type: String
+  - name: edl-manager-metrics-get
+    description: 'Gets impact metrics: time from request to approval, time until a firewall pulls the updated list, and which firewall clients are polling. The API key needs the view permission.'
+    arguments:
+    - name: days
+      description: The size of the window, ending now, in days (1-3650).
+      defaultValue: '30'
+    outputs:
+    - contextPath: EDLManager.Metrics.GeneratedAt
+      description: When the metrics were computed.
+      type: Date
+    - contextPath: EDLManager.Metrics.Window.Days
+      description: The size of the window, in days.
+      type: Number
+    - contextPath: EDLManager.Metrics.Window.From
+      description: Start of the window.
+      type: Date
+    - contextPath: EDLManager.Metrics.Window.To
+      description: End of the window.
+      type: Date
+    - contextPath: EDLManager.Metrics.Indicators.Active.Total
+      description: Entries blocked right now.
+      type: Number
+    - contextPath: EDLManager.Metrics.Indicators.Active.Ip
+      description: IP addresses and CIDR ranges blocked right now.
+      type: Number
+    - contextPath: EDLManager.Metrics.Indicators.Active.Domain
+      description: Domains blocked right now.
+      type: Number
+    - contextPath: EDLManager.Metrics.Indicators.Active.Url
+      description: URLs blocked right now.
+      type: Number
+    - contextPath: EDLManager.Metrics.Indicators.Added
+      description: Entries approved in the window.
+      type: Number
+    - contextPath: EDLManager.Metrics.Indicators.Removed
+      description: Entries removed from the blocklists in the window.
+      type: Number
+    - contextPath: EDLManager.Metrics.Requests.Submitted
+      description: Requests submitted in the window.
+      type: Number
+    - contextPath: EDLManager.Metrics.Requests.Approved
+      description: Requests approved in the window.
+      type: Number
+    - contextPath: EDLManager.Metrics.Requests.Denied
+      description: Requests denied in the window.
+      type: Number
+    - contextPath: EDLManager.Metrics.Requests.ApprovalRate
+      description: Approved divided by approved plus denied, in the window.
+      type: Number
+    - contextPath: EDLManager.Metrics.Requests.Pending
+      description: Requests waiting for approval now.
+      type: Number
+    - contextPath: EDLManager.Metrics.Requests.OldestPendingAgeSeconds
+      description: How long the oldest pending request has waited, in seconds.
+      type: Number
+    - contextPath: EDLManager.Metrics.TimeToBlock.Count
+      description: Approvals measured for time from request to approval.
+      type: Number
+    - contextPath: EDLManager.Metrics.TimeToBlock.MedianSeconds
+      description: Median time from request to approval, in seconds.
+      type: Number
+    - contextPath: EDLManager.Metrics.TimeToBlock.P90Seconds
+      description: 90th percentile time from request to approval, in seconds.
+      type: Number
+    - contextPath: EDLManager.Metrics.TimeToBlock.ByPriority
+      description: The same figures for each priority.
+      type: Unknown
+    - contextPath: EDLManager.Metrics.TimeToEnforcement.Count
+      description: Approvals measured for time until a firewall fetched the updated list.
+      type: Number
+    - contextPath: EDLManager.Metrics.TimeToEnforcement.MedianSeconds
+      description: Median time from approval until a firewall first fetched the updated list, in seconds.
+      type: Number
+    - contextPath: EDLManager.Metrics.TimeToEnforcement.P90Seconds
+      description: 90th percentile time from approval until a firewall first fetched the updated list, in seconds.
+      type: Number
+    - contextPath: EDLManager.Metrics.TimeToEnforcement.Coverage
+      description: Share of approvals in the window that could be measured (fetch tracking was running).
+      type: Number
+    - contextPath: EDLManager.Metrics.RequestToEnforcement.Count
+      description: Requests measured from submission until a firewall fetched the updated list.
+      type: Number
+    - contextPath: EDLManager.Metrics.RequestToEnforcement.MedianSeconds
+      description: Median time from request until a firewall first fetched the updated list, in seconds.
+      type: Number
+    - contextPath: EDLManager.Metrics.RequestToEnforcement.P90Seconds
+      description: 90th percentile time from request until a firewall first fetched the updated list, in seconds.
+      type: Number
+    - contextPath: EDLManager.Metrics.Firewalls.Tracking
+      description: Whether any list fetch has been recorded.
+      type: Boolean
+    - contextPath: EDLManager.Metrics.Firewalls.Total
+      description: Firewall clients (address and user agent pairs) that have fetched a list.
+      type: Number
+    - contextPath: EDLManager.Metrics.Firewalls.Polling
+      description: Firewall clients polling on schedule.
+      type: Number
+    - contextPath: EDLManager.Metrics.Firewalls.Stale
+      description: Firewall clients that stopped polling.
+      type: Number
+    - contextPath: EDLManager.Metrics.Firewalls.Clients.Ip
+      description: The client's source address.
+      type: String
+    - contextPath: EDLManager.Metrics.Firewalls.Clients.UserAgent
+      description: The client's user agent.
+      type: String
+    - contextPath: EDLManager.Metrics.Firewalls.Clients.Lists
+      description: The lists the client fetches.
+      type: String
+    - contextPath: EDLManager.Metrics.Firewalls.Clients.FirstSeen
+      description: When the client first fetched a list.
+      type: Date
+    - contextPath: EDLManager.Metrics.Firewalls.Clients.LastSeen
+      description: When the client last fetched a list.
+      type: Date
+    - contextPath: EDLManager.Metrics.Firewalls.Clients.TypicalIntervalSeconds
+      description: How often the client polls, in seconds.
+      type: Number
+    - contextPath: EDLManager.Metrics.Firewalls.Clients.Stale
+      description: Whether the client stopped polling.
+      type: Boolean
+    - contextPath: EDLManager.Metrics.Lists
+      description: 'For each list (Ip, Domain, Url): entries, when it was published and last fetched, and clients in the last 24 hours.'
+      type: Unknown
+    - contextPath: EDLManager.Metrics.Summary
+      description: Plain-language summary lines for reports.
+      type: String
+  dockerimage: demisto/python3:3.12.13.10116658
+  runonce: false
+  script: '-'
+  subtype: python3
+  type: python
+fromversion: 6.10.0
+tests:
+- No tests (auto formatted)

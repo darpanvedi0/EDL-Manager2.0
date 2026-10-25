@@ -1,0 +1,40 @@
+{
+    "benchmark": "publish",
+    "runs_per_size": 7,
+    "statistic": "median",
+    "php": "8.3.6",
+    "results": [
+        {
+            "entries": 1000,
+            "publish_ms": 5.09,
+            "submit_ms": 4.15,
+            "approve_ms": 12.79,
+            "store_bytes": 535845,
+            "ip_list_bytes": 6405
+        },
+        {
+            "entries": 10000,
+            "publish_ms": 38.98,
+            "submit_ms": 33.08,
+            "approve_ms": 122.42,
+            "store_bytes": 5353606,
+            "ip_list_bytes": 67945
+        },
+        {
+            "entries": 50000,
+            "publish_ms": 220.68,
+            "submit_ms": 222.36,
+            "approve_ms": 760.95,
+            "store_bytes": 26884674,
+            "ip_list_bytes": 360249
+        },
+        {
+            "entries": 100000,
+            "publish_ms": 534.49,
+            "submit_ms": 525.09,
+            "approve_ms": 1992.97,
+            "store_bytes": 53793351,
+            "ip_list_bytes": 720471
+        }
+    ]
+}

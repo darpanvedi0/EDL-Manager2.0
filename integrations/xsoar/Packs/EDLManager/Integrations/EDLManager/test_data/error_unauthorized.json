@@ -1,0 +1,6 @@
+{
+    "error": {
+        "code": "unauthorized",
+        "message": "Send a valid API key as \"Authorization: Bearer <token>\""
+    }
+}

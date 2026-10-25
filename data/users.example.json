@@ -1,0 +1,44 @@
+{
+    "admin": {
+        "password": "REPLACE_WITH_HASH_FROM_password_hash()",
+        "name": "System Administrator",
+        "email": "admin@company.com",
+        "role": "admin",
+        "permissions": [
+            "submit",
+            "approve",
+            "view",
+            "manage",
+            "audit"
+        ]
+    },
+    "approver": {
+        "password": "REPLACE_WITH_HASH_FROM_password_hash()",
+        "name": "Security Approver",
+        "email": "approver@company.com",
+        "role": "approver",
+        "permissions": [
+            "approve",
+            "view"
+        ]
+    },
+    "operator": {
+        "password": "REPLACE_WITH_HASH_FROM_password_hash()",
+        "name": "Security Operator",
+        "email": "operator@company.com",
+        "role": "operator",
+        "permissions": [
+            "submit",
+            "view"
+        ]
+    },
+    "viewer": {
+        "password": "REPLACE_WITH_HASH_FROM_password_hash()",
+        "name": "Security Viewer",
+        "email": "viewer@company.com",
+        "role": "viewer",
+        "permissions": [
+            "view"
+        ]
+    }
+}

@@ -1,8 +1,4 @@
 <?php
-// Temporary debug - add this at the very top of index.php
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-
 // Check for Okta callback parameters and redirect if found
 if (isset($_GET['code']) || isset($_GET['state']) || isset($_GET['error'])) {
     // These are Okta callback parameters - redirect to clean URL

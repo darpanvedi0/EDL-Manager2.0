@@ -1,0 +1,48 @@
+{
+    "data": {
+        "created": [
+            {
+                "id": "req_6add17377f5f9_bbb3edd3",
+                "entry": "198.51.100.7",
+                "type": "ip",
+                "status": "pending",
+                "priority": "high",
+                "justification": "C2 infrastructure from incident 1234",
+                "comment": "",
+                "servicenow_ticket": "SIR0012345",
+                "submitted_by": "api:xsoar",
+                "submitted_at": "2026-10-24T20:38:15+00:00"
+            },
+            {
+                "id": "req_6add17377f695_11dbc25a",
+                "entry": "evil.example.com",
+                "type": "domain",
+                "status": "pending",
+                "priority": "high",
+                "justification": "C2 infrastructure from incident 1234",
+                "comment": "",
+                "servicenow_ticket": "SIR0012345",
+                "submitted_by": "api:xsoar",
+                "submitted_at": "2026-10-24T20:38:15+00:00"
+            },
+            {
+                "id": "req_6add17377f6ac_24f63dea",
+                "entry": "https://bad.example.net/login",
+                "type": "url",
+                "status": "pending",
+                "priority": "high",
+                "justification": "C2 infrastructure from incident 1234",
+                "comment": "",
+                "servicenow_ticket": "SIR0012345",
+                "submitted_by": "api:xsoar",
+                "submitted_at": "2026-10-24T20:38:15+00:00"
+            }
+        ],
+        "skipped": [
+            {
+                "entry": "not valid!",
+                "reason": "Could not determine the entry type; pass \"type\" (ip, domain, or url)"
+            }
+        ]
+    }
+}

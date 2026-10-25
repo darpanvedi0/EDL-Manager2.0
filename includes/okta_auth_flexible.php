@@ -323,6 +323,9 @@ class OktaAuthFlexible {
         // Determine user role based on group membership
         $user_role = $this->determine_role($groups);
         
+        // New session ID for the logged-in session (prevents session fixation)
+        regenerate_session_on_login();
+        
         // Set session variables - BOTH authenticated and okta_authenticated
         $_SESSION['authenticated'] = true;
         $_SESSION['okta_authenticated'] = true;
@@ -388,8 +391,7 @@ class OktaAuthFlexible {
     
     private function log_login($email, $groups, $role, $user_data) {
         // Add to audit log
-        $audit_logs = read_json_file(DATA_DIR . '/audit_logs.json');
-        $audit_logs[] = [
+        append_audit_log([
             'id' => uniqid('audit_', true),
             'timestamp' => date('c'),
             'action' => 'user_login_okta_flexible',
@@ -400,8 +402,7 @@ class OktaAuthFlexible {
             'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'unknown',
             'okta_subject' => $user_data['sub'] ?? '',
             'okta_issuer' => $user_data['iss'] ?? ''
-        ];
-        write_json_file(DATA_DIR . '/audit_logs.json', $audit_logs);
+        ]);
     }
     
     public function check_session() {

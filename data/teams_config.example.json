@@ -1,0 +1,15 @@
+{
+    "enabled": false,
+    "webhook_url": "",
+    "notifications": {
+        "new_requests": true,
+        "approved_requests": false,
+        "denied_requests": false,
+        "critical_priority": true
+    },
+    "mention_users": [],
+    "channel_name": "#security-team",
+    "custom_message": "",
+    "updated_at": null,
+    "updated_by": null
+}

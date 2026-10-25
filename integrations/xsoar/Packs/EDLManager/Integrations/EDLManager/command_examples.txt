@@ -1,0 +1,9 @@
+!edl-manager-request-submit entries="203.0.113.10,phish.example.org,https://login.example.net/verify,999.1.1.1" justification="Phishing campaign from incident 4821" servicenow_ticket=SIR0004821 priority=high
+!edl-manager-request-get request_id=req_6add186a31eef_5286cdde
+!edl-manager-request-list limit=10
+!edl-manager-request-approve request_id=req_6add186a31eef_5286cdde comment="Confirmed phishing infrastructure"
+!edl-manager-request-deny request_id=req_6add186a31f3e_670eff31 reason="Shared hosting; blocking would affect other sites"
+!edl-manager-entry-list type=ip
+!edl-manager-entry-get entry_id=app_6add186a364336.19620368
+!edl-manager-entry-remove entry_id=app_6add186a364336.19620368 reason="Campaign takedown confirmed"
+!edl-manager-metrics-get days=30

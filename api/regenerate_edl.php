@@ -3,10 +3,9 @@
 require_once '../config/config.php';
 require_once '../includes/functions.php';
 require_once '../includes/auth.php';
+require_once '../includes/edl_lists.php';
 
 header('Content-Type: application/json');
-
-session_start();
 
 $auth = new EDLAuth();
 if (!$auth->check_session() || !has_permission('manage')) {
@@ -15,56 +14,30 @@ if (!$auth->check_session() || !has_permission('manage')) {
     exit;
 }
 
+// Lock so an approval can't land between reading the entries and writing the files
+acquire_data_lock();
+
 try {
-    // Load approved entries
-    $approved_entries = read_json_file(DATA_DIR . '/approved_entries.json');
-    $active_entries = array_filter($approved_entries, fn($e) => ($e['status'] ?? '') === 'active');
-    
-    $ip_list = [];
-    $domain_list = [];
-    $url_list = [];
-    
-    foreach ($active_entries as $entry) {
-        switch ($entry['type'] ?? '') {
-            case 'ip':
-                $ip_list[] = $entry['entry'];
-                break;
-            case 'domain':
-                $domain_list[] = $entry['entry'];
-                break;
-            case 'url':
-                $url_list[] = $entry['entry'];
-                break;
-        }
+    $result = write_edl_lists();
+    if (!$result['written']) {
+        throw new Exception('Failed to write EDL files. Check that edl-files/ is writable.');
     }
-    
-    // Ensure EDL files directory exists
-    if (!is_dir(EDL_FILES_DIR)) {
-        mkdir(EDL_FILES_DIR, 0755, true);
-    }
-    
-    // Write EDL files
-    file_put_contents(EDL_FILES_DIR . '/ip_blocklist.txt', implode("\n", $ip_list));
-    file_put_contents(EDL_FILES_DIR . '/domain_blocklist.txt', implode("\n", $domain_list));
-    file_put_contents(EDL_FILES_DIR . '/url_blocklist.txt', implode("\n", $url_list));
     
     $stats = [
-        'ip_count' => count($ip_list),
-        'domain_count' => count($domain_list),
-        'url_count' => count($url_list)
+        'ip_count' => $result['ip_count'],
+        'domain_count' => $result['domain_count'],
+        'url_count' => $result['url_count']
     ];
     
     // Log the regeneration
-    $audit_logs = read_json_file(DATA_DIR . '/audit_logs.json');
-    $audit_logs[] = [
+    append_audit_log([
         'id' => uniqid('audit_', true),
         'timestamp' => date('c'),
         'action' => 'regenerate_edl',
         'entry' => 'EDL Files',
         'user' => $_SESSION['username'],
         'details' => "Regenerated EDL files: {$stats['ip_count']} IPs, {$stats['domain_count']} domains, {$stats['url_count']} URLs"
-    ];
-    write_json_file(DATA_DIR . '/audit_logs.json', $audit_logs);
+    ]);
     
     echo json_encode([
         'success' => true,
@@ -79,4 +52,6 @@ try {
         'error' => $e->getMessage()
     ]);
 }
+
+release_data_lock();
 ?>

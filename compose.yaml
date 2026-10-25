@@ -1,0 +1,29 @@
+services:
+  edl-manager:
+    image: ghcr.io/darpanvedi0/edl-manager:latest
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      # Leave empty to generate a password on first start (printed in the logs).
+      EDL_ADMIN_PASSWORD: ${EDL_ADMIN_PASSWORD:-}
+      # Set to 1 once the UI is served over HTTPS.
+      EDL_SECURE_COOKIES: ${EDL_SECURE_COOKIES:-0}
+      TZ: ${TZ:-UTC}
+    volumes:
+      - edl-data:/var/lib/edl-manager
+      - edl-lists:/var/www/html/edl-files
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/run/apache2
+      - /var/lock/apache2
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+volumes:
+  edl-data:
+  edl-lists:
