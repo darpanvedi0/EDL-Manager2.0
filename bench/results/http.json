@@ -1,0 +1,87 @@
+{
+  "benchmark": "http",
+  "entries_loaded": 10000,
+  "seconds_per_download_run": 10,
+  "downloads": {
+    "static_file": {
+      "concurrency_1": {
+        "requests": 19960,
+        "p50_ms": 0.47,
+        "p95_ms": 0.71,
+        "requests_per_second": 1995.9,
+        "errors": 0
+      },
+      "concurrency_8": {
+        "requests": 20323,
+        "p50_ms": 3.59,
+        "p95_ms": 7.43,
+        "requests_per_second": 2031.2,
+        "errors": 0
+      }
+    },
+    "feed_tracked": {
+      "concurrency_1": {
+        "requests": 11519,
+        "p50_ms": 0.82,
+        "p95_ms": 1.18,
+        "requests_per_second": 1151.8,
+        "errors": 0
+      },
+      "concurrency_8": {
+        "requests": 17409,
+        "p50_ms": 4.17,
+        "p95_ms": 8.89,
+        "requests_per_second": 1740.1,
+        "errors": 0
+      }
+    },
+    "feed_new_client_every_request": {
+      "concurrency_1": {
+        "requests": 2182,
+        "p50_ms": 4.4,
+        "p95_ms": 6.8,
+        "requests_per_second": 218.1,
+        "errors": 0
+      },
+      "concurrency_8": {
+        "requests": 3150,
+        "p50_ms": 25.24,
+        "p95_ms": 32.44,
+        "requests_per_second": 314.4,
+        "errors": 0
+      }
+    }
+  },
+  "api": {
+    "submit_one": {
+      "requests": 100,
+      "p50_ms": 33.43,
+      "p95_ms": 52.81,
+      "errors": 0
+    },
+    "approve": {
+      "requests": 100,
+      "p50_ms": 98.43,
+      "p95_ms": 129.73,
+      "errors": 0
+    },
+    "submit_500": {
+      "requests": 5,
+      "p50_ms": 300.04,
+      "p95_ms": 341.2,
+      "errors": 0
+    },
+    "metrics": {
+      "requests": 20,
+      "p50_ms": 59.28,
+      "p95_ms": 92.16,
+      "errors": 0
+    },
+    "entries_page": {
+      "requests": 20,
+      "p50_ms": 32.5,
+      "p95_ms": 50.59,
+      "errors": 0
+    }
+  }
+}

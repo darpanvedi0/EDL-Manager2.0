@@ -284,6 +284,7 @@ edl-manager/
 │   └── 📁 xsoar/             # Cortex XSOAR content pack (demisto/content layout) and its tests
 ├── 📁 tests/
 │   └── run.php               # Unit tests (php tests/run.php)
+├── 📁 bench/                 # Performance and accuracy benchmarks (bench/run.sh) and results
 ├── feed.php                 # Serves the lists to firewalls and records fetches
 ├── user_setup.php           # User account creation (CLI, or admin-only in browser)
 └── index.php                # Main dashboard
@@ -488,7 +489,7 @@ There are no debug or diagnostic pages in the web root; check the web server / P
 php tests/run.php                                     # unit tests: requests, API keys, fetch tracking, metrics
 docker build -t edl-manager:dev . && docker/smoke-test.sh edl-manager:dev   # end to end, through Apache
 ```
-CI runs both on every pull request.
+CI runs both on every pull request. [`bench/`](bench) holds the performance and time-to-enforcement accuracy benchmarks, with their latest results.
 
 ### 📂 File Requirements
 - The data directory (`EDL_DATA_DIR`, default `data/`) must be writable by the PHP user and must not be served over HTTP (750)

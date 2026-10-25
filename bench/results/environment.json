@@ -1,0 +1,10 @@
+{
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.80GHz",
+  "vcpus": 4,
+  "memory_gb": 15.7,
+  "kernel": "6.18.44-fc-v153",
+  "docker": "29.9.2",
+  "host_php": "8.3.6",
+  "python": "3.13.17",
+  "image": "edl-manager:bench"
+}
